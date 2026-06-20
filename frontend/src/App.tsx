@@ -10,7 +10,7 @@ import type { CommandType, CommandAcknowledgement } from './types/command';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'diagnostics' | 'replay' | 'about'>('dashboard');
-  
+
   // Real Connection states (Phase 2)
   const [connectionState, setConnectionState] = useState<WSConnectionState>('DISCONNECTED');
   const [liveTelemetry, setLiveTelemetry] = useState<TelemetryUpdate | null>(null);
@@ -53,32 +53,32 @@ function App() {
       try {
         const data = JSON.parse(event.data);
         console.log(`[WS] Message received from backend. Type: ${data.type || 'unknown'}, Timestamp: ${data.timestamp}`);
-        
+
         if (data.type === 'telemetry_update') {
           const update = data as TelemetryUpdate;
           setLiveTelemetry(update);
-          
+
           if (update.latest_command) {
             setLastAck((prev) => {
               if (!prev) return update.latest_command!;
-              
+
               if (prev.status === 'SENDING') {
                 if (update.latest_command!.command_type === prev.command_type) {
                   return update.latest_command!;
                 }
                 return prev;
               }
-              
+
               const prevTime = new Date(prev.timestamp).getTime();
               const nextTime = new Date(update.latest_command!.timestamp).getTime();
-              
+
               if (nextTime >= prevTime) {
                 return update.latest_command!;
               }
               return prev;
             });
           }
-          
+
           lastMessageTimeRef.current = Date.now();
           setLastUpdate(new Date());
           setStale(false);
@@ -147,8 +147,8 @@ function App() {
         try {
           const errData = await res.json();
           errMsg = errData.message || errMsg;
-        } catch {}
-        
+        } catch { }
+
         console.error(`[REST API] Command failed with status code ${res.status}`);
         setLastAck({
           command_id: `err-${Date.now()}`,
@@ -234,7 +234,7 @@ function App() {
       case 'dashboard':
       default:
         return (
-          <Dashboard 
+          <Dashboard
             externalTelemetry={liveTelemetry}
             onSendCommand={handleSendCommand}
             lastAck={lastAck}
@@ -244,8 +244,8 @@ function App() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
-      
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', overflowX: 'hidden' }}>
+
       {/* GCS HEADER BAR */}
       <header style={{
         height: 'var(--header-height)',
@@ -312,7 +312,7 @@ function App() {
       </header>
 
       {/* VIEWPORT AREA */}
-      <main style={{ flex: 1, overflow: 'hidden', background: 'var(--bg-primary)' }}>
+      <main style={{ flex: 1, background: 'var(--bg-primary)' }}>
         {renderPage()}
       </main>
 

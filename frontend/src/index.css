@@ -46,7 +46,6 @@
   color: var(--color-text-primary);
   margin: 0;
   padding: 0;
-  overflow: hidden;
 }
 
 body {
@@ -55,17 +54,16 @@ body {
   background-color: var(--bg-primary);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
-  height: 100vh;
+  min-height: 100%;
   width: 100vw;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 #root {
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -93,12 +91,11 @@ body {
 .gcs-dashboard {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto;
   gap: 12px;
   padding: 12px;
-  height: calc(100vh - var(--header-height) - 24px);
+  min-height: calc(100vh - var(--header-height));
   box-sizing: border-box;
-  overflow: hidden;
 }
 
 .gcs-panel {
