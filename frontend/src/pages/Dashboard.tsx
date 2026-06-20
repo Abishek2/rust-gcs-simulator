@@ -3,6 +3,7 @@ import { getMockTelemetry } from '../utils/mockData';
 import type { TelemetryUpdate, FrontendStateData } from '../types/telemetry';
 import type { Track } from '../types/track';
 import type { CommandType, CommandAcknowledgement } from '../types/command';
+import type { SystemEvent } from '../types/event';
 import { RadarView } from '../components/RadarView';
 import { TrackPanel } from '../components/TrackPanel';
 import { VehiclePanel } from '../components/VehiclePanel';
@@ -69,7 +70,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       setTelemetry((prev) => {
         // Map backend events (timestamp, message, source) to frontend SystemEvent shape
-        const backendEvents = (externalTelemetry.events || []).map((e, index) => {
+        const backendEvents: SystemEvent[] = (externalTelemetry.events || []).map((e, index) => {
           let severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO';
           const msgLower = e.message.toLowerCase();
           if (msgLower.includes('reject') || msgLower.includes('failed to') || msgLower.includes('error')) {
