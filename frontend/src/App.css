@@ -1,0 +1,6 @@
+/* GCS App specific styles */
+.nav-tab-btn:hover {
+  background: rgba(0, 240, 255, 0.05) !important;
+  color: #fff !important;
+  text-shadow: 0 0 6px var(--color-cyber-blue);
+}

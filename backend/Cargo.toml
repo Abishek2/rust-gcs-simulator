@@ -1,0 +1,49 @@
+[package]
+name = "gcs-backend"
+version = "0.1.0"
+edition = "2021"
+description = "Rust Ground Control Station Simulator — simulation-only backend for portfolio demo"
+authors = ["Abishek"]
+
+[dependencies]
+# --- Phase 1: Core server ---
+# axum: The web framework built on top of Tokio. Think of it like Express.js for Rust.
+axum = { version = "0.8", features = ["ws"] }
+
+# tokio: The async runtime. Rust doesn't have a built-in async runtime like Node.js,
+# so we use Tokio. "full" enables all features (timers, I/O, sync primitives, etc.)
+tokio = { version = "1", features = ["full"] }
+
+# tower-http: Middleware for HTTP services. We use it for CORS (Cross-Origin Resource Sharing)
+# so the frontend can talk to our backend from a different port.
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# serde: Serialization/deserialization framework. Converts Rust structs <-> JSON automatically.
+# "derive" lets us use #[derive(Serialize, Deserialize)] on structs.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# tracing: Structured logging. Better than println! because it adds timestamps, log levels,
+# and can be filtered. tracing-subscriber formats the output for the terminal.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# chrono: Date/time library. We use it for timestamps on events and telemetry.
+chrono = { version = "0.4", features = ["serde"] }
+
+# uuid: Generates unique IDs for tracks, sessions, events, etc.
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# thiserror: Makes it easy to define custom error types with nice messages.
+thiserror = "2"
+
+# anyhow: Flexible error handling for application-level code. Good for "just propagate errors."
+anyhow = "1"
+
+# --- Phase 2: Simulation ---
+# rand: Random number generation for simulating track movement, confidence, etc.
+rand = "0.9"
+
+# --- Phase 5+ dependencies (will uncomment as needed) ---
+# sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "uuid"] }
+# futures = "0.3"
