@@ -123,7 +123,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             altitude: Math.max(10, prev.vehicle.altitude + altitudeBob),
             speed: Math.max(5, prev.vehicle.speed + speedBob),
             battery_percent: Math.max(1, prev.vehicle.battery_percent - 0.01), // discharge battery
-            last_updated: new Date().toISOString(),
+            last_heartbeat: new Date().toISOString(),
           };
         } else if (prev.vehicle.state === 'TAKEOFF') {
           // Climb to target 150m
@@ -134,7 +134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             altitude: isTargetReached ? 150 : newAlt,
             speed: isTargetReached ? 12.8 : 8.5,
             state: isTargetReached ? 'FLYING' : 'TAKEOFF',
-            last_updated: new Date().toISOString(),
+            last_heartbeat: new Date().toISOString(),
           };
         } else if (prev.vehicle.state === 'LANDING') {
           // Descent to 0m
@@ -145,16 +145,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
             altitude: newAlt,
             speed: isLanded ? 0 : 3.2,
             state: isLanded ? 'DISARMED' : 'LANDING',
-            last_updated: new Date().toISOString(),
+            last_heartbeat: new Date().toISOString(),
           };
         }
 
         // 3. Diagnostics fluctuation
         nextTelemetry.diagnostics = {
           ...prev.diagnostics,
-          cpu_usage_percent: Math.max(5, Math.min(95, prev.diagnostics.cpu_usage_percent + (Math.random() - 0.5) * 4)),
-          network_rx_kbps: Math.max(50, prev.diagnostics.network_rx_kbps + (Math.random() - 0.5) * 20),
-          network_tx_kbps: Math.max(5, prev.diagnostics.network_tx_kbps + (Math.random() - 0.5) * 5),
+          cpu_usage_percent: Math.max(5, Math.min(95, prev.diagnostics.cpu_usage_percent! + (Math.random() - 0.5) * 4)),
+          network_rx_kbps: Math.max(50, prev.diagnostics.network_rx_kbps! + (Math.random() - 0.5) * 20),
+          network_tx_kbps: Math.max(5, prev.diagnostics.network_tx_kbps! + (Math.random() - 0.5) * 5),
           uptime_seconds: prev.diagnostics.uptime_seconds + 1,
         };
 
@@ -165,7 +165,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           nextTelemetry.video_health = {
             ...prev.video_health,
             fps: Math.max(15, Math.min(30, prev.video_health.fps + fpsJitter)),
-            bitrate_kbps: Math.max(500, Math.min(4000, prev.video_health.bitrate_kbps + bitrateJitter)),
+            bitrate_kbps: Math.max(500, Math.min(4000, prev.video_health.bitrate_kbps! + bitrateJitter)),
           };
         }
 
@@ -304,14 +304,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleFireCell = (cellId: number) => {
     setTelemetry((prev) => {
-      const cells = prev.launchbox.cells.map((c) => {
+      const cells = prev.launchbox.cells!.map((c) => {
         if (c.cell_id === cellId) {
           return { ...c, status: 'FIRED' as const, temperature: 48.2 };
         }
         return c;
       });
 
-      const firedCell = prev.launchbox.cells.find(c => c.cell_id === cellId);
+      const firedCell = prev.launchbox.cells!.find(c => c.cell_id === cellId);
       const newEvent = {
         id: `evt-${Date.now()}`,
         timestamp: new Date().toISOString(),

@@ -76,17 +76,18 @@ async fn main() -> anyhow::Result<()> {
     // AppState holds the broadcast channel that connects the simulator
     // to WebSocket clients. `.with_state(state)` passes it to all handlers
     // so they can call `State(state)` to access it.
-    let state = AppState::new();
+    let (state, command_rx) = AppState::new();
     tracing::info!("application state initialized");
 
     // --- Step 5: Start the telemetry simulator ---
     //
-    // This spawns a background Tokio task that generates simulated radar
-    // tracks every second and broadcasts them through the channel.
-    // We pass a clone of the broadcast sender — cloning is cheap (just
-    // increments a reference count).
-    services::telemetry_simulator::start_simulator(state.telemetry_tx.clone());
-    tracing::info!("telemetry simulator spawned");
+    // This spawns a background Tokio task that runs all subsystem
+    // simulations (tracks, vehicle, launchbox, video, diagnostics)
+    // and broadcasts combined telemetry updates every second.
+    // We pass the full AppState so the simulator can update the
+    // shared snapshot for HTTP endpoints.
+    services::telemetry_simulator::start_simulator(state.clone(), command_rx);
+    tracing::info!("telemetry simulator spawned (all subsystems active)");
 
     // --- Step 6: Build the Axum router ---
     //
@@ -108,6 +109,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", axum::routing::get(api::http::health_check))
         // Phase 2: WebSocket telemetry stream
         .route("/ws/telemetry", axum::routing::get(api::websocket::ws_telemetry_handler))
+        // Phase 3: Subsystem snapshot endpoints
+        .route("/tracks", axum::routing::get(api::http::get_tracks))
+        .route("/vehicle", axum::routing::get(api::http::get_vehicle))
+        .route("/launchbox", axum::routing::get(api::http::get_launchbox))
+        .route("/video-health", axum::routing::get(api::http::get_video_health))
+        .route("/diagnostics", axum::routing::get(api::http::get_diagnostics))
+        // Phase 4: Command API
+        .route("/commands", axum::routing::post(api::http::post_command))
         // Shared state — available to all handlers via State extractor
         .with_state(state)
         // Middleware: CORS and request tracing

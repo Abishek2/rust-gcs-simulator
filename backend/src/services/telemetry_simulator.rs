@@ -1,48 +1,51 @@
-//! Telemetry simulator — generates realistic-looking simulated radar tracks.
+//! Telemetry simulator — the main simulation engine.
 //!
-//! This module spawns a background Tokio task that:
-//! 1. Creates a set of initial tracks around a central point
-//! 2. Every second, moves them based on heading/speed with random perturbations
-//! 3. Broadcasts the updated telemetry to all connected WebSocket clients
+//! Spawns a background Tokio task that runs all subsystem simulations
+//! (tracks, vehicle, launchbox, video, diagnostics) and broadcasts
+//! the combined telemetry update every second.
 //!
 //! ## SAFETY BOUNDARY
-//! All data is synthetic. No real radar, sensor, or hardware input is used.
+//! All data is synthetic. No real radar, vehicle, camera, or hardware
+//! input is used. This is a portfolio demonstration only.
 
 use chrono::Utc;
-use rand::Rng;
 use rand::rngs::StdRng;
+use rand::Rng;
 use rand::SeedableRng;
 use std::f64::consts::PI;
-use tokio::sync::broadcast;
+use std::time::Instant;
 use tokio::time::{interval, Duration};
 
-use crate::models::track::{Track, TrackStatus};
 use crate::models::telemetry::TelemetryUpdate;
+use crate::models::track::{Track, TrackStatus};
+use crate::models::vehicle::{ConnectionState, SystemMode, VehicleState};
+use crate::services::diagnostics_service::DiagnosticsTracker;
+use crate::services::launchbox_simulator::LaunchboxSimulator;
+use crate::services::telemetry_router::{AppState, LatestTelemetry};
+use crate::services::video_health_simulator::VideoHealthSimulator;
 
-/// Earth constants for coordinate math
+// ═══════════════════════════════════════════════════════════════════
+//  Constants
+// ═══════════════════════════════════════════════════════════════════
+
 const METERS_PER_DEGREE_LAT: f64 = 111_320.0;
-
-/// Central point for the simulation (Munich area)
 const CENTER_LAT: f64 = 48.14;
 const CENTER_LNG: f64 = 11.58;
 
-/// Create the initial set of simulated tracks.
-///
-/// # Rust Concept: `Vec<Track>`
-/// `Vec` is Rust's growable array (like `ArrayList` in Java or `[]` in JS).
-/// Unlike arrays (`[Track; 5]`) which have a fixed size known at compile time,
-/// `Vec` can grow and shrink at runtime.
+// ═══════════════════════════════════════════════════════════════════
+//  Track simulation (carried over from Phase 2)
+// ═══════════════════════════════════════════════════════════════════
+
 fn create_initial_tracks() -> Vec<Track> {
     let now = Utc::now();
-
     vec![
         Track {
             track_id: "TRK-001".to_string(),
             latitude: CENTER_LAT + 0.01,
             longitude: CENTER_LNG + 0.02,
-            speed: 42.5,    // m/s — about 150 km/h
+            speed: 42.5,
             altitude: 120.0,
-            heading: 85.0,  // heading east
+            heading: 85.0,
             confidence: 0.92,
             status: TrackStatus::Tracking,
             last_update_timestamp: now,
@@ -53,7 +56,7 @@ fn create_initial_tracks() -> Vec<Track> {
             longitude: CENTER_LNG - 0.01,
             speed: 28.0,
             altitude: 250.0,
-            heading: 210.0, // heading south-southwest
+            heading: 210.0,
             confidence: 0.78,
             status: TrackStatus::Tracking,
             last_update_timestamp: now,
@@ -64,7 +67,7 @@ fn create_initial_tracks() -> Vec<Track> {
             longitude: CENTER_LNG - 0.03,
             speed: 15.0,
             altitude: 80.0,
-            heading: 320.0, // heading northwest
+            heading: 320.0,
             confidence: 0.65,
             status: TrackStatus::New,
             last_update_timestamp: now,
@@ -75,7 +78,7 @@ fn create_initial_tracks() -> Vec<Track> {
             longitude: CENTER_LNG + 0.035,
             speed: 55.0,
             altitude: 180.0,
-            heading: 45.0,  // heading northeast
+            heading: 45.0,
             confidence: 0.88,
             status: TrackStatus::Tracking,
             last_update_timestamp: now,
@@ -84,7 +87,7 @@ fn create_initial_tracks() -> Vec<Track> {
             track_id: "TRK-005".to_string(),
             latitude: CENTER_LAT + 0.03,
             longitude: CENTER_LNG + 0.01,
-            speed: 8.0,     // slow — loitering
+            speed: 8.0,
             altitude: 60.0,
             heading: 170.0,
             confidence: 0.55,
@@ -94,30 +97,11 @@ fn create_initial_tracks() -> Vec<Track> {
     ]
 }
 
-/// Update all tracks by one simulation tick (1 second).
-///
-/// Each track moves forward based on its heading and speed, with random
-/// perturbations to heading, speed, altitude, and confidence to simulate
-/// realistic radar behavior.
-///
-/// # Rust Concept: `&mut Vec<Track>`
-/// The `&mut` means "mutable borrow" — we're borrowing the vector and
-/// are allowed to modify it. Rust's borrow checker ensures no one else
-/// is reading the vector while we're modifying it. This prevents data
-/// races at compile time.
-///
-/// # Rust Concept: `impl Rng`
-/// `impl Rng` means "any type that implements the Rng trait." This is
-/// called an "impl trait" parameter — it's like generics but simpler
-/// to write. The compiler figures out the concrete type.
 fn update_tracks(tracks: &mut Vec<Track>, rng: &mut impl Rng) {
     let now = Utc::now();
 
     for track in tracks.iter_mut() {
-        // --- Movement: advance position based on heading and speed ---
         let heading_rad = track.heading * PI / 180.0;
-
-        // How far the track moves in 1 second at its current speed
         let delta_lat = track.speed * heading_rad.cos() / METERS_PER_DEGREE_LAT;
         let delta_lng = track.speed * heading_rad.sin()
             / (METERS_PER_DEGREE_LAT * (track.latitude * PI / 180.0).cos());
@@ -125,26 +109,18 @@ fn update_tracks(tracks: &mut Vec<Track>, rng: &mut impl Rng) {
         track.latitude += delta_lat;
         track.longitude += delta_lng;
 
-        // --- Random perturbations to simulate real radar jitter ---
-        // Heading: slight drift ±5°
         track.heading += rng.random_range(-5.0..5.0_f64);
-        // Keep heading in 0..360 using modular arithmetic
         track.heading = ((track.heading % 360.0) + 360.0) % 360.0;
 
-        // Speed: slight variation ±2 m/s
         track.speed += rng.random_range(-2.0..2.0_f64);
         track.speed = track.speed.clamp(5.0, 120.0);
 
-        // Altitude: ±5m drift
         track.altitude += rng.random_range(-5.0..5.0_f64);
         track.altitude = track.altitude.clamp(30.0, 500.0);
 
-        // Confidence: fluctuates slightly
         track.confidence += rng.random_range(-0.03..0.03_f64);
         track.confidence = track.confidence.clamp(0.3, 1.0);
 
-        // --- Status transitions based on confidence ---
-        // Low confidence → might go STALE or LOST
         track.status = match track.confidence {
             c if c >= 0.7 => TrackStatus::Tracking,
             c if c >= 0.5 => TrackStatus::Stale,
@@ -154,85 +130,206 @@ fn update_tracks(tracks: &mut Vec<Track>, rng: &mut impl Rng) {
         track.last_update_timestamp = now;
     }
 
-    // Keep tracks from drifting too far — wrap them back toward the center
+    // Geo-fence: turn back toward center when drifting too far
     for track in tracks.iter_mut() {
         let dist_lat = (track.latitude - CENTER_LAT).abs();
         let dist_lng = (track.longitude - CENTER_LNG).abs();
 
         if dist_lat > 0.1 || dist_lng > 0.1 {
-            // Turn the track back toward center
             let to_center_lat = CENTER_LAT - track.latitude;
             let to_center_lng = CENTER_LNG - track.longitude;
             track.heading = (to_center_lng.atan2(to_center_lat) * 180.0 / PI + 360.0) % 360.0;
             tracing::debug!(
                 track_id = %track.track_id,
-                heading = %track.heading,
                 "track drifted far — turning back toward center"
             );
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  Vehicle simulation (Phase 3)
+// ═══════════════════════════════════════════════════════════════════
+
+fn create_initial_vehicle() -> VehicleState {
+    VehicleState {
+        vehicle_id: "VH-001".to_string(),
+        connection_state: ConnectionState::Healthy,
+        mode: SystemMode::Standby,
+        battery_percent: 85.0,
+        latitude: CENTER_LAT,
+        longitude: CENTER_LNG,
+        altitude: 0.0,
+        speed: 0.0,
+        heading: 0.0,
+        last_heartbeat: Utc::now(),
+    }
+}
+
+/// Update vehicle state for one tick.
+///
+/// # Simulation behavior
+/// - **Battery**: slowly drains ~0.01–0.03% per second; occasional charge boost (1%)
+/// - **Connection**: probabilistic transitions between HEALTHY/DEGRADED/LOST
+/// - **Mode**: heuristic-based on track confidence and connection state
+///   (Phase 4 replaces this with a command-driven state machine)
+/// - **Position**: stationary with slight GPS jitter for realism
+fn update_vehicle(vehicle: &mut VehicleState, _tracks: &[Track], rng: &mut impl Rng) {
+    // --- Battery drain ---
+    vehicle.battery_percent -= rng.random_range(0.01_f64..0.03);
+    // Rare charge boost (simulates charging cycle — 1% chance per tick)
+    if rng.random_range(0_u32..100) == 0 {
+        vehicle.battery_percent = (vehicle.battery_percent + 8.0).min(100.0);
+        tracing::debug!(
+            battery = %vehicle.battery_percent,
+            "vehicle battery charge boost"
+        );
+    }
+    vehicle.battery_percent = vehicle.battery_percent.clamp(0.0, 100.0);
+
+    // --- Connection state transitions ---
+    let roll: f64 = rng.random_range(0.0_f64..1.0);
+    vehicle.connection_state = match &vehicle.connection_state {
+        ConnectionState::Healthy => {
+            if roll < 0.03 {
+                tracing::warn!("vehicle connection degraded");
+                ConnectionState::Degraded
+            } else {
+                ConnectionState::Healthy
+            }
+        }
+        ConnectionState::Degraded => {
+            if roll < 0.40 {
+                tracing::info!("vehicle connection recovered");
+                ConnectionState::Healthy
+            } else if roll > 0.97 {
+                tracing::error!("vehicle connection lost");
+                ConnectionState::Lost
+            } else {
+                ConnectionState::Degraded
+            }
+        }
+        ConnectionState::Lost => {
+            if roll < 0.15 {
+                tracing::info!("vehicle connection recovering (degraded)");
+                ConnectionState::Degraded
+            } else {
+                ConnectionState::Lost
+            }
+        }
+    };
+
+    // --- Mode is now fully managed by the State Machine ---
+
+    // --- Position: stationary with GPS jitter ---
+    vehicle.latitude = CENTER_LAT + rng.random_range(-0.0001_f64..0.0001);
+    vehicle.longitude = CENTER_LNG + rng.random_range(-0.0001_f64..0.0001);
+
+    vehicle.last_heartbeat = Utc::now();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Main simulation loop
+// ═══════════════════════════════════════════════════════════════════
+
 /// Start the telemetry simulation loop.
 ///
-/// This function spawns a Tokio task that runs forever, generating
-/// telemetry updates every second and broadcasting them to all
-/// connected WebSocket clients.
-///
-/// # Rust Concept: `tokio::spawn`
-/// `tokio::spawn` creates a new async task — like launching a goroutine
-/// in Go or a thread in other languages, but lighter weight. Tokio tasks
-/// are cooperatively scheduled on a thread pool. They're ideal for I/O
-/// work like timers and network calls.
-///
-/// # Rust Concept: `broadcast::Sender`
-/// The broadcast channel is a multi-producer, multi-consumer channel.
-/// The simulator sends updates, and each WebSocket client subscribes
-/// to receive them. If no clients are connected, the send is a no-op.
-pub fn start_simulator(tx: broadcast::Sender<TelemetryUpdate>) {
+/// Spawns a Tokio task that runs all subsystem simulations and broadcasts
+/// the combined telemetry update every second. Also updates the shared
+/// snapshot for HTTP GET endpoints.
+pub fn start_simulator(
+    state: AppState,
+    mut command_rx: tokio::sync::mpsc::Receiver<(
+        crate::models::command::CommandRequest,
+        tokio::sync::oneshot::Sender<crate::models::command::CommandResponse>,
+    )>,
+) {
     tokio::spawn(async move {
+        // --- Initialize all subsystems ---
         let mut tracks = create_initial_tracks();
-        // # Rust Concept: `Send` trait and async tasks
-        // `tokio::spawn` requires the future to be `Send` (safe to move
-        // between threads). `rand::rng()` returns `ThreadRng` which uses
-        // `Rc` internally — `Rc` is NOT `Send`. So we use `StdRng` instead,
-        // which is an owned, thread-safe RNG. This is a very common gotcha
-        // in async Rust: anything held across an `.await` must be `Send`.
+        let mut vehicle = create_initial_vehicle();
+        let mut launchbox_sim = LaunchboxSimulator::new();
+        let mut video_sim = VideoHealthSimulator::new();
+        let mut diagnostics = DiagnosticsTracker::new();
+        let mut state_machine = crate::services::state_machine::StateMachine::new();
         let mut rng = StdRng::from_os_rng();
         let mut tick_interval = interval(Duration::from_secs(1));
         let mut tick_count: u64 = 0;
 
         tracing::info!(
             track_count = tracks.len(),
-            "telemetry simulator started — generating updates every 1s"
+            "telemetry simulator started — all subsystems active"
         );
 
         loop {
             tick_interval.tick().await;
             tick_count += 1;
+            let tick_start = Instant::now();
 
-            // Evolve the simulation by one step
+            // --- Update all subsystems ---
             update_tracks(&mut tracks, &mut rng);
+            update_vehicle(&mut vehicle, &tracks, &mut rng);
+            launchbox_sim.tick(&mut rng);
+            video_sim.tick(&mut rng);
 
-            // Build the telemetry message
-            let update = TelemetryUpdate::new(tracks.clone());
+            // --- Process pending commands ---
+            while let Ok((request, reply)) = command_rx.try_recv() {
+                let command_id = state_machine.accept_command(request);
+                let response = crate::models::command::CommandResponse {
+                    command_id,
+                    status: crate::models::command::CommandStatus::Accepted, // Just a default return status for the API response
+                    message: "Command submitted".to_string(),
+                };
+                let _ = reply.send(response);
+            }
 
-            // Broadcast to all subscribers (connected WebSocket clients)
-            // If no one is listening, `send` returns Err — that's fine.
-            match tx.send(update) {
+            // --- Advance state machine ---
+            state_machine.tick();
+            vehicle.mode = state_machine.current_mode.clone();
+
+            // --- Measure tick processing time ---
+            let tick_duration = tick_start.elapsed();
+            diagnostics.record_tick_latency(tick_duration);
+
+            // --- Build diagnostics snapshot ---
+            let diag = diagnostics.snapshot(state.client_count());
+
+            // --- Build full telemetry update ---
+            let update = TelemetryUpdate::new(
+                tracks.clone(),
+                vehicle.clone(),
+                launchbox_sim.state().clone(),
+                video_sim.state().clone(),
+                diag.clone(),
+            );
+
+            // --- Update shared state for HTTP endpoints ---
+            if let Ok(mut latest) = state.latest.write() {
+                *latest = LatestTelemetry {
+                    tracks: tracks.clone(),
+                    vehicle: vehicle.clone(),
+                    launchbox: launchbox_sim.state().clone(),
+                    video_health: video_sim.state().clone(),
+                    diagnostics: diag,
+                };
+            }
+
+            // --- Broadcast to WebSocket clients ---
+            match state.telemetry_tx.send(update) {
                 Ok(receivers) => {
+                    diagnostics.record_broadcast(receivers);
                     if tick_count % 10 == 0 {
-                        // Log every 10th tick to avoid log spam
                         tracing::info!(
                             tick = tick_count,
                             receivers = receivers,
-                            track_count = tracks.len(),
+                            mode = ?vehicle.mode,
+                            battery = format!("{:.1}%", vehicle.battery_percent),
                             "telemetry broadcast"
                         );
                     }
                 }
                 Err(_) => {
-                    // No subscribers — normal when no clients are connected
+                    diagnostics.record_drop();
                     if tick_count % 30 == 0 {
                         tracing::debug!(tick = tick_count, "no WebSocket subscribers");
                     }

@@ -1,8 +1,13 @@
 export interface VideoHealth {
+  stream_id: string;
+  stream_state: 'CONNECTED' | 'RECONNECTING' | 'LOST';
   fps: number;
-  bitrate_kbps: number;
   latency_ms: number;
-  status: 'NOMINAL' | 'DEGRADED' | 'LOST';
-  stream_url?: string;
-  last_updated: string;
+  dropped_frames: number;
+  resolution: string;
+  last_frame_timestamp: string;
+
+  // Optional Frontend-only variables for fallback representation
+  bitrate_kbps?: number;
+  status?: 'NOMINAL' | 'DEGRADED' | 'LOST';
 }

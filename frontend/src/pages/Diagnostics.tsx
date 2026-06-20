@@ -27,10 +27,10 @@ export const DiagnosticsPage: React.FC = () => {
       // Fluctuate metrics
       setMetrics((prev) => ({
         ...prev,
-        cpu_usage_percent: Math.max(5, Math.min(95, prev.cpu_usage_percent + (Math.random() - 0.5) * 6)),
-        memory_usage_mb: Math.max(100, Math.min(1024, prev.memory_usage_mb + (Math.random() - 0.5) * 8)),
-        network_rx_kbps: Math.max(50, prev.network_rx_kbps + (Math.random() - 0.5) * 30),
-        network_tx_kbps: Math.max(5, prev.network_tx_kbps + (Math.random() - 0.5) * 10),
+        cpu_usage_percent: Math.max(5, Math.min(95, prev.cpu_usage_percent! + (Math.random() - 0.5) * 6)),
+        memory_usage_mb: Math.max(100, Math.min(1024, prev.memory_usage_mb! + (Math.random() - 0.5) * 8)),
+        network_rx_kbps: Math.max(50, prev.network_rx_kbps! + (Math.random() - 0.5) * 30),
+        network_tx_kbps: Math.max(5, prev.network_tx_kbps! + (Math.random() - 0.5) * 10),
         uptime_seconds: prev.uptime_seconds + 2,
       }));
 
@@ -75,23 +75,23 @@ export const DiagnosticsPage: React.FC = () => {
             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px' }}>
               <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>HOST MEMORY ALLOCATION</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
-                {metrics.memory_usage_mb.toFixed(1)} / 1024 MB
+                {metrics.memory_usage_mb!.toFixed(1)} / 1024 MB
               </div>
             </div>
 
             <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px' }}>
               <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>HOST CPU LOAD</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-cyber-blue)' }}>
-                {metrics.cpu_usage_percent.toFixed(1)}%
+                {metrics.cpu_usage_percent!.toFixed(1)}%
               </div>
             </div>
 
             <div>
               <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>NET SPEED SUMMARY</div>
               <div style={{ marginTop: '4px', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div>📥 RX Rate: {metrics.network_rx_kbps.toFixed(1)} KB/s</div>
-                <div>📤 TX Rate: {metrics.network_tx_kbps.toFixed(1)} KB/s</div>
-                <div>❌ Packets Lost: {metrics.packet_loss_percent.toFixed(2)}%</div>
+                <div>📥 RX Rate: {metrics.network_rx_kbps!.toFixed(1)} KB/s</div>
+                <div>📤 TX Rate: {metrics.network_tx_kbps!.toFixed(1)} KB/s</div>
+                <div>❌ Packets Lost: {metrics.packet_loss_percent!.toFixed(2)}%</div>
               </div>
             </div>
           </div>

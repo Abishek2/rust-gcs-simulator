@@ -28,37 +28,33 @@ export const VehiclePanel: React.FC<VehiclePanelProps> = ({ vehicle }) => {
     );
   }
 
-  const getFlightModeClass = (mode: Vehicle['flight_mode']) => {
+  const getModeBadgeClass = (mode: Vehicle['mode']) => {
     switch (mode) {
-      case 'AUTO':
+      case 'READY':
         return 'badge-success';
-      case 'GUIDED':
+      case 'TRACKING':
         return 'badge-info';
-      case 'RTL':
-      case 'LAND':
+      case 'STANDBY':
         return 'badge-warning';
-      case 'MANUAL':
+      case 'FAULT':
+      case 'ABORTED':
       default:
         return 'badge-danger';
     }
   };
 
-  const getStateBadge = (state: Vehicle['state']) => {
+  const getConnStateBadge = (state: Vehicle['connection_state']) => {
     switch (state) {
-      case 'FLYING':
-        return <span className="badge badge-success blink">FLYING</span>;
-      case 'ARMED':
-        return <span className="badge badge-warning">ARMED</span>;
-      case 'TAKEOFF':
-      case 'LANDING':
-        return <span className="badge badge-info blink">{state}</span>;
-      case 'DISARMED':
+      case 'HEALTHY':
+        return <span className="badge badge-success">HEALTHY</span>;
+      case 'DEGRADED':
+        return <span className="badge badge-warning blink">DEGRADED</span>;
+      case 'LOST':
       default:
-        return <span className="badge badge-info" style={{ borderColor: 'var(--color-text-dim)', color: 'var(--color-text-secondary)' }}>DISARMED</span>;
+        return <span className="badge badge-danger blink">LOST</span>;
     }
   };
 
-  // Color battery based on level
   const getBatteryColor = (lvl: number) => {
     if (lvl > 50) return 'var(--color-success)';
     if (lvl > 20) return 'var(--color-warning)';
@@ -69,42 +65,36 @@ export const VehiclePanel: React.FC<VehiclePanelProps> = ({ vehicle }) => {
     <div className="gcs-panel" style={{ height: '100%' }}>
       <div className="gcs-panel-header">
         <span>Vehicle Telemetry</span>
-        <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{vehicle.id}</span>
+        <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{vehicle.vehicle_id}</span>
       </div>
       <div className="gcs-panel-body font-mono" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         
         {/* Core States */}
         <div className="flex-between" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '6px' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>FLIGHT MODE</span>
-            <span className={`badge ${getFlightModeClass(vehicle.flight_mode)}`} style={{ alignSelf: 'flex-start', marginTop: '2px' }}>
-              {vehicle.flight_mode}
+            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>SYSTEM MODE</span>
+            <span className={`badge ${getModeBadgeClass(vehicle.mode)}`} style={{ alignSelf: 'flex-start', marginTop: '2px' }}>
+              {vehicle.mode}
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>SYSTEM STATE</span>
-            <span style={{ marginTop: '2px' }}>{getStateBadge(vehicle.state)}</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>COMM LINK</span>
+            <span style={{ marginTop: '2px' }}>{getConnStateBadge(vehicle.connection_state)}</span>
           </div>
         </div>
 
-        {/* GPS, Comm Link & Power */}
-        <div className="grid-3" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '6px', textAlign: 'center' }}>
+        {/* GPS status and link battery stats */}
+        <div className="grid-2" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '6px', textAlign: 'center' }}>
           <div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>BATTERY</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: getBatteryColor(vehicle.battery_percent) }}>
-              {vehicle.battery_percent}%
+            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>BATTERY POWER</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: getBatteryColor(vehicle.battery_percent) }}>
+              {vehicle.battery_percent.toFixed(1)}%
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>GPS SATS</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: vehicle.gps_satellites >= 10 ? 'var(--color-success)' : 'var(--color-warning)' }}>
-              {vehicle.gps_satellites}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>LINK STR.</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: vehicle.connection_strength > 75 ? 'var(--color-cyber-blue)' : 'var(--color-warning)' }}>
-              {vehicle.connection_strength}%
+            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>HEARTBEAT</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-cyber-blue)', marginTop: '4px' }}>
+              {new Date(vehicle.last_heartbeat).toLocaleTimeString()}
             </div>
           </div>
         </div>
@@ -125,19 +115,19 @@ export const VehiclePanel: React.FC<VehiclePanelProps> = ({ vehicle }) => {
         <div className="grid-3" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '6px' }}>
           <div>
             <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>ALTITUDE</div>
-            <div style={{ color: '#fff', fontSize: '1rem', fontWeight: 'bold' }}>{vehicle.altitude.toFixed(1)} m</div>
+            <div style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 'bold' }}>{vehicle.altitude.toFixed(1)} m</div>
           </div>
           <div>
             <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>AIRSPEED</div>
-            <div style={{ color: '#fff', fontSize: '1rem', fontWeight: 'bold' }}>{vehicle.speed.toFixed(1)} m/s</div>
+            <div style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 'bold' }}>{vehicle.speed.toFixed(1)} m/s</div>
           </div>
           <div>
             <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem' }}>HEADING</div>
-            <div style={{ color: '#fff', fontSize: '1rem', fontWeight: 'bold' }}>{Math.round(vehicle.heading)}°</div>
+            <div style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 'bold' }}>{Math.round(vehicle.heading)}°</div>
           </div>
         </div>
 
-        {/* Basic Visual Orientation Indicator (Yaw compass band) */}
+        {/* Yaw Compass Band */}
         <div style={{ marginTop: '4px' }}>
           <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginBottom: '4px', textAlign: 'center' }}>COMPASS HEADING</div>
           <div style={{
@@ -150,7 +140,6 @@ export const VehiclePanel: React.FC<VehiclePanelProps> = ({ vehicle }) => {
             display: 'flex',
             alignItems: 'center'
           }}>
-            {/* Center indicator arrow */}
             <div style={{
               position: 'absolute',
               top: '0',
@@ -164,14 +153,12 @@ export const VehiclePanel: React.FC<VehiclePanelProps> = ({ vehicle }) => {
               zIndex: 2
             }} />
             
-            {/* Moving dial inside */}
             <div style={{
               display: 'flex',
               whiteSpace: 'nowrap',
               position: 'absolute',
               transition: 'transform 0.2s ease-out',
-              // Shift dial based on heading
-              transform: `translateX(calc(-${vehicle.heading / 360 * 100}% + 130px))`,
+              transform: `translateX(calc(-${(vehicle.heading % 360) / 360 * 100}% + 130px))`,
               width: '400px',
               fontFamily: 'var(--font-display)',
               fontSize: '10px',

@@ -6,9 +6,16 @@ export interface LaunchCell {
 }
 
 export interface Launchbox {
-  status: 'READY' | 'NOT_READY' | 'LAUNCHED' | 'ERROR' | 'STANDBY';
-  cells: LaunchCell[];
-  safety_switch: boolean; // true if safety engaged (safe), false if off (ready to fire)
-  key_inserted: boolean;  // simulation key inserted
-  last_updated: string;
+  launchbox_id: string;
+  door_state: 'OPEN' | 'CLOSED';
+  vehicle_present: boolean;
+  charging: boolean;
+  health: 'OK' | 'WARNING' | 'FAULT';
+  temperature_celsius: number;
+  last_update: string;
+
+  // Optional Frontend-only local simulation parameters
+  cells?: LaunchCell[];
+  safety_switch?: boolean;
+  key_inserted?: boolean;
 }

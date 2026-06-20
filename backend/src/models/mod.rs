@@ -6,11 +6,11 @@
 
 pub mod track;
 pub mod telemetry;
+pub mod vehicle;
+pub mod launchbox;
+pub mod video;
+pub mod diagnostics;
 
-// Phase 3+: Uncomment as we add models
-// pub mod vehicle;
-// pub mod launchbox;
-// pub mod video;
-// pub mod command;
+// Phase 4+: Uncomment as we add models
+pub mod command;
 // pub mod event;
-// pub mod diagnostics;

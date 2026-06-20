@@ -24,7 +24,7 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
       const h = canvas.height;
 
       // Check current status
-      const status = videoHealth?.status || 'LOST';
+      const status = videoHealth?.stream_state || 'LOST';
 
       if (status === 'LOST') {
         // Draw TV Static (Snow)
@@ -55,9 +55,9 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
         ctx.fillStyle = '#05070a';
         ctx.fillRect(0, 0, w, h);
 
-        // Draw scanlines in DEGRADED status
-        if (status === 'DEGRADED') {
-          ctx.strokeStyle = 'rgba(245, 158, 11, 0.06)';
+        // Draw scanlines in RECONNECTING status
+        if (status === 'RECONNECTING') {
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.08)';
           ctx.lineWidth = 1;
           for (let y = 0; y < h; y += 4) {
             ctx.beginPath();
@@ -68,7 +68,7 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
         }
 
         // Draw green tactical color palette (dimmed if degraded)
-        const hudColor = status === 'DEGRADED' ? 'rgba(245, 158, 11, 0.6)' : 'rgba(0, 240, 255, 0.7)';
+        const hudColor = status === 'RECONNECTING' ? 'rgba(245, 158, 11, 0.6)' : 'rgba(0, 240, 255, 0.7)';
         ctx.strokeStyle = hudColor;
         ctx.fillStyle = hudColor;
         ctx.lineWidth = 1;
@@ -130,7 +130,7 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
         ctx.save();
         ctx.translate(targetX, targetY);
         ctx.rotate(rot);
-        ctx.strokeStyle = status === 'DEGRADED' ? 'rgba(245, 158, 11, 0.8)' : 'rgba(239, 68, 68, 0.7)';
+        ctx.strokeStyle = status === 'RECONNECTING' ? 'rgba(245, 158, 11, 0.8)' : 'rgba(239, 68, 68, 0.7)';
         ctx.strokeRect(-10, -10, 20, 20);
         ctx.beginPath();
         ctx.arc(0, 0, 14, 0, 2 * Math.PI);
@@ -138,7 +138,7 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
         ctx.restore();
 
         ctx.font = '8px Orbitron';
-        ctx.fillStyle = status === 'DEGRADED' ? 'var(--color-warning)' : 'var(--color-danger)';
+        ctx.fillStyle = status === 'RECONNECTING' ? 'var(--color-warning)' : 'var(--color-danger)';
         ctx.fillText('SIM TRK LOCK', targetX + 16, targetY + 3);
 
         // Add scan line running down screen
@@ -169,11 +169,11 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
     };
   }, [videoHealth]);
 
-  const getStatusColor = (status: VideoHealth['status']) => {
+  const getStatusColor = (status: VideoHealth['stream_state']) => {
     switch (status) {
-      case 'NOMINAL':
+      case 'CONNECTED':
         return 'var(--color-success)';
-      case 'DEGRADED':
+      case 'RECONNECTING':
         return 'var(--color-warning)';
       case 'LOST':
       default:
@@ -184,16 +184,16 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
   return (
     <div className="gcs-panel" style={{ height: '100%' }}>
       <div className="gcs-panel-header">
-        <span>Video Health Monitor</span>
+        <span>Video: {videoHealth?.stream_id || 'STREAM-01'}</span>
         <span 
           className="badge" 
           style={{ 
-            borderColor: getStatusColor(videoHealth?.status || 'LOST'),
-            color: getStatusColor(videoHealth?.status || 'LOST'),
+            borderColor: getStatusColor(videoHealth?.stream_state || 'LOST'),
+            color: getStatusColor(videoHealth?.stream_state || 'LOST'),
             background: 'rgba(0,0,0,0.3)'
           }}
         >
-          {videoHealth?.status || 'LOST'}
+          {videoHealth?.stream_state || 'LOST'}
         </span>
       </div>
       <div className="gcs-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px' }}>
@@ -220,19 +220,19 @@ export const VideoHealthPanel: React.FC<VideoHealthPanelProps> = ({ videoHealth 
           <div>
             <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.65rem' }}>FRAMERATE</div>
             <div style={{ fontWeight: 'bold', color: '#fff' }}>
-              {videoHealth?.status === 'LOST' ? 0.0 : videoHealth?.fps.toFixed(1)} FPS
+              {videoHealth?.stream_state === 'LOST' ? 0.0 : videoHealth?.fps.toFixed(1)} FPS
             </div>
           </div>
           <div>
-            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.65rem' }}>BITRATE</div>
-            <div style={{ fontWeight: 'bold', color: '#fff' }}>
-              {videoHealth?.status === 'LOST' ? 0 : videoHealth?.bitrate_kbps} Kbps
+            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.65rem' }}>RESOLUTION</div>
+            <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '0.7rem', marginTop: '2px' }}>
+              {videoHealth?.stream_state === 'LOST' ? 'N/A' : videoHealth?.resolution}
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.65rem' }}>LATENCY</div>
             <div style={{ fontWeight: 'bold', color: videoHealth && videoHealth.latency_ms > 200 ? 'var(--color-warning)' : 'var(--color-success)' }}>
-              {videoHealth?.status === 'LOST' ? '∞' : `${videoHealth?.latency_ms} ms`}
+              {videoHealth?.stream_state === 'LOST' ? '∞' : `${videoHealth?.latency_ms.toFixed(1)} ms`}
             </div>
           </div>
         </div>
