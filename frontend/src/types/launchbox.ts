@@ -2,7 +2,7 @@ export interface LaunchCell {
   cell_id: number;
   status: 'EMPTY' | 'LOADED' | 'ARMED' | 'FIRED';
   temperature: number; // Celsius
-  payload_type: string; // e.g. "Simulated Flare", "Sensor Probe"
+  payload_type: string; // e.g. "Simulated Flare", "Simulated Asset"
 }
 
 export interface Launchbox {

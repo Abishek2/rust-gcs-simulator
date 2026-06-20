@@ -17,7 +17,7 @@ export const LaunchboxPanel: React.FC<LaunchboxPanelProps> = ({
   if (!launchbox) {
     return (
       <div className="gcs-panel" style={{ height: '100%' }}>
-        <div className="gcs-panel-header">Simulated Launcher Status</div>
+        <div className="gcs-panel-header">Simulated Launchbox Status</div>
         <div 
           className="gcs-panel-body"
           style={{ 
@@ -62,6 +62,20 @@ export const LaunchboxPanel: React.FC<LaunchboxPanelProps> = ({
     }
   };
 
+  const getCellStatusLabel = (status: LaunchCell['status']) => {
+    switch (status) {
+      case 'ARMED':
+        return 'SIM READY';
+      case 'FIRED':
+        return 'TESTED';
+      case 'LOADED':
+        return 'LOADED';
+      case 'EMPTY':
+      default:
+        return 'EMPTY';
+    }
+  };
+
   // Safe defaults if fields are not defined in raw backend packets yet
   const safetySwitch = launchbox.safety_switch !== undefined ? launchbox.safety_switch : true;
   const keyInserted = launchbox.key_inserted !== undefined ? launchbox.key_inserted : false;
@@ -76,7 +90,7 @@ export const LaunchboxPanel: React.FC<LaunchboxPanelProps> = ({
   return (
     <div className="gcs-panel" style={{ height: '100%' }}>
       <div className="gcs-panel-header">
-        <span>Launcher: {launchbox.launchbox_id}</span>
+        <span>Launchbox: {launchbox.launchbox_id}</span>
         {getHealthBadge(launchbox.health)}
       </div>
       <div className="gcs-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px' }}>
@@ -167,7 +181,7 @@ export const LaunchboxPanel: React.FC<LaunchboxPanelProps> = ({
                       borderRadius: '2px'
                     }}
                   >
-                    {cell.status}
+                    {getCellStatusLabel(cell.status)}
                   </span>
                   <span style={{ color: 'var(--color-text-dim)', fontSize: '0.65rem' }}>
                     ({cell.payload_type})
@@ -184,12 +198,27 @@ export const LaunchboxPanel: React.FC<LaunchboxPanelProps> = ({
                     disabled={!isArmedAndReady || cell.status !== 'ARMED' && cell.status !== 'LOADED'}
                     onClick={() => onFireCell(cell.cell_id)}
                   >
-                    FIRE
+                    TEST
                   </button>
                 </div>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Safety Warnings */}
+        <div style={{ 
+          fontSize: '0.65rem', 
+          color: 'var(--color-text-dim)', 
+          textAlign: 'center', 
+          border: '1px dashed rgba(239, 68, 68, 0.2)',
+          background: 'rgba(239, 68, 68, 0.02)',
+          padding: '6px',
+          borderRadius: '4px'
+        }}>
+          {!keyInserted && "⚠️ INHIBIT: Insert simulation key to activate safety switch control."}
+          {keyInserted && safetySwitch && "⚠️ SAFE: Disengage Safe Mode to enable simulated cell triggers."}
+          {isArmedAndReady && "⚡ STATUS: Simulation mode ready. Actions are simulated-only flare/asset checks."}
         </div>
 
       </div>

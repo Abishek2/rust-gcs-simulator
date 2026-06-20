@@ -218,7 +218,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         } else if (type === 'TAKEOFF') {
           if (prev.vehicle.state === 'DISARMED') {
             status = 'FAILED';
-            error_message = 'Vehicle must be ARMED prior to simulated takeoff.';
+            error_message = 'Vehicle must be READY prior to simulated takeoff.';
           } else {
             nextTelemetry.vehicle.state = 'TAKEOFF';
           }

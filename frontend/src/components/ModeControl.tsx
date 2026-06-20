@@ -116,7 +116,7 @@ export const ModeControl: React.FC<ModeControlProps> = ({
             onClick={() => handleCommand('RTL')} // Mapped as Abort/RTL command
             disabled={pendingCmd !== null || vehicle.mode === 'ABORTED'}
           >
-            ABORT SIMULATED MISSION
+            ABORT SIMULATED WORKFLOW
           </button>
         </div>
 

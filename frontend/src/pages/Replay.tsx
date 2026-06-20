@@ -32,7 +32,7 @@ const mockSessions: ReplaySession[] = [
     date: '2026-06-20 16:10:45',
     duration_seconds: 120,
     records_count: 1200,
-    description: 'Launcher sequence simulation discharging Cell 5 weather probe under safe modes.'
+    description: 'Launchbox sequence simulation discharging Cell 5 weather asset under safe modes.'
   }
 ];
 
@@ -81,7 +81,7 @@ export const ReplayPage: React.FC = () => {
       setReplaySpeed(25 + Math.sin(currentSeconds * 0.05) * 5);
       setReplayBattery(Math.max(65, 100 - progress * 25));
     } else {
-      // Cell launch: alt remains at 200m, fires mid flight
+      // Cell launch: alt remains at 200m, deploys asset mid flight
       setReplayAltitude(200);
       setReplaySpeed(15 + Math.cos(currentSeconds * 0.1) * 3);
       setReplayBattery(Math.max(85, 95 - progress * 8));

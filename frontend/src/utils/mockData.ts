@@ -120,13 +120,12 @@ export const getMockTelemetry = (): FrontendStateData => ({
     health: 'OK',
     temperature_celsius: 22.0,
     last_update: new Date().toISOString(),
-    // Client mock fields
     cells: [
       { cell_id: 1, status: 'LOADED', temperature: 24.5, payload_type: 'Simulated Flare' },
       { cell_id: 2, status: 'LOADED', temperature: 25.1, payload_type: 'Simulated Flare' },
-      { cell_id: 3, status: 'ARMED', temperature: 42.0, payload_type: 'Simulated Probe' },
+      { cell_id: 3, status: 'ARMED', temperature: 42.0, payload_type: 'Simulated Asset' },
       { cell_id: 4, status: 'EMPTY', temperature: 22.8, payload_type: 'None' },
-      { cell_id: 5, status: 'FIRED', temperature: 31.4, payload_type: 'Simulated Probe' },
+      { cell_id: 5, status: 'FIRED', temperature: 31.4, payload_type: 'Simulated Asset' },
       { cell_id: 6, status: 'EMPTY', temperature: 21.0, payload_type: 'None' },
     ],
     safety_switch: true,
