@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - GCS_HOST=0.0.0.0
+      - GCS_PORT=3001
+      - GCS_LOG_LEVEL=${GCS_LOG_LEVEL:-info}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3001}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:3001/ws/telemetry}
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+    restart: unless-stopped

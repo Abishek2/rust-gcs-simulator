@@ -1,0 +1,8 @@
+target
+.git
+.gitignore
+.env
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
