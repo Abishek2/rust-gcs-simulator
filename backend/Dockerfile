@@ -1,4 +1,4 @@
-FROM rust:1.85-slim AS builder
+FROM rust:1.86-slim AS builder
 
 WORKDIR /app
 
@@ -10,8 +10,9 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
 RUN rm -rf src
 
-# Copy the actual source code
+# Copy the actual source code and migrations
 COPY src ./src
+COPY migrations ./migrations
 # Touch the file to ensure cargo sees it as modified
 RUN touch src/main.rs
 RUN cargo build --release
@@ -31,6 +32,10 @@ COPY --from=builder /app/target/release/gcs-backend /usr/local/bin/gcs-backend
 ENV GCS_HOST=0.0.0.0
 ENV GCS_PORT=3001
 ENV GCS_LOG_LEVEL=info
+ENV DATABASE_URL=sqlite:///data/gcs_simulator.db
+
+# Create a directory for the SQLite database
+RUN mkdir -p /data && chown -R root:root /data
 
 # Expose the backend port
 EXPOSE 3001

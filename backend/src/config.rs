@@ -17,6 +17,8 @@ pub struct Config {
     pub port: u16,
     /// Log level filter (e.g., "info", "debug", "trace")
     pub log_level: String,
+    /// CORS allowed origins
+    pub cors_allowed_origins: String,
 }
 
 impl Config {
@@ -44,7 +46,10 @@ impl Config {
         let log_level = std::env::var("GCS_LOG_LEVEL")
             .unwrap_or_else(|_| "info".to_string());
 
-        Self { host, port, log_level }
+        let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
+            .unwrap_or_else(|_| "http://localhost:5173,http://localhost:4173".to_string());
+
+        Self { host, port, log_level, cors_allowed_origins }
     }
 
     /// Returns the full socket address string (e.g., "0.0.0.0:3001").

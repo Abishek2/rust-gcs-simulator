@@ -23,6 +23,7 @@ use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
+use axum::http::HeaderValue;
 
 use services::telemetry_router::AppState;
 
@@ -104,9 +105,15 @@ async fn main() -> anyhow::Result<()> {
     // # What is CORS?
     // CORS (Cross-Origin Resource Sharing) tells browsers which origins
     // are allowed to call our API. Since the frontend will run on a
-    // different port (e.g., 5173), we need to allow cross-origin requests.
+    // different port (e.g., 5173) or domain, we need to allow cross-origin requests.
+    let origins: Vec<HeaderValue> = config
+        .cors_allowed_origins
+        .split(',')
+        .map(|s| s.trim().parse().unwrap())
+        .collect();
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(origins)
         .allow_methods(Any)
         .allow_headers(Any);
 
