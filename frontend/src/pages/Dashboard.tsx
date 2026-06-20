@@ -67,13 +67,99 @@ export const Dashboard: React.FC<DashboardProps> = ({
         };
       });
 
-      setTelemetry((prev) => ({
-        ...prev,
-        tracks: mappedTracks,
-        timestamp: externalTelemetry.timestamp,
-      }));
+      setTelemetry((prev) => {
+        // Map backend events (timestamp, message, source) to frontend SystemEvent shape
+        const backendEvents = (externalTelemetry.events || []).map((e, index) => {
+          let severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO';
+          const msgLower = e.message.toLowerCase();
+          if (msgLower.includes('reject') || msgLower.includes('failed to') || msgLower.includes('error')) {
+            severity = 'ERROR';
+          } else if (msgLower.includes('timeout') || msgLower.includes('warn')) {
+            severity = 'WARNING';
+          } else if (msgLower.includes('abort') || msgLower.includes('critical')) {
+            severity = 'CRITICAL';
+          }
+          
+          return {
+            id: `backend-event-${e.timestamp}-${index}-${e.message.slice(0, 15)}`,
+            timestamp: e.timestamp,
+            severity,
+            message: e.message,
+            source: e.source,
+          };
+        });
+
+        // Merge backend events with existing local events, checking for duplicates
+        const combinedEvents = [...backendEvents];
+        prev.events.forEach((localEvt) => {
+          const isDuplicate = combinedEvents.some(
+            (be) => be.message === localEvt.message && be.timestamp === localEvt.timestamp
+          );
+          if (!isDuplicate) {
+            combinedEvents.push(localEvt);
+          }
+        });
+
+        // Sort descending by timestamp
+        combinedEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        return {
+          ...prev,
+          tracks: mappedTracks,
+          timestamp: externalTelemetry.timestamp,
+          vehicle: externalTelemetry.vehicle,
+          launchbox: {
+            ...prev.launchbox,
+            ...externalTelemetry.launchbox,
+          },
+          video_health: {
+            ...prev.video_health,
+            ...externalTelemetry.video_health,
+          },
+          diagnostics: {
+            ...prev.diagnostics,
+            ...externalTelemetry.diagnostics,
+          },
+          events: combinedEvents.slice(0, 100),
+        };
+      });
     }
   }, [externalTelemetry]);
+
+  // Synchronize incoming command acknowledgements into the Event Log
+  useEffect(() => {
+    const ack = externalTelemetry ? externalLastAck : localLastAck;
+    if (ack) {
+      setTelemetry((prev) => {
+        // Prevent duplicate logs for the same status update
+        const eventId = `evt-ack-${ack.command_id || ack.timestamp}-${ack.status}`;
+        const logExists = prev.events.some(e => e.id === eventId);
+        if (logExists) return prev;
+
+        let severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO';
+        if (ack.status === 'REJECTED_INVALID_TRANSITION' || ack.status === 'ACK_TIMEOUT') {
+          severity = 'ERROR';
+        } else if (ack.status === 'SENDING') {
+          severity = 'INFO';
+        } else if (ack.status === 'ACK_RECEIVED') {
+          severity = 'WARNING';
+        }
+
+        const newEvent = {
+          id: eventId,
+          timestamp: new Date().toISOString(),
+          severity,
+          message: `Uplink Command [${ack.command_type}]: status shifted to ${ack.status.replace(/_/g, ' ')} (${ack.message || 'Transmission acknowledged'})`,
+          source: 'COMMAND_UPLINK',
+        };
+
+        return {
+          ...prev,
+          events: [newEvent, ...prev.events].slice(0, 100),
+        };
+      });
+    }
+  }, [externalLastAck, localLastAck, externalTelemetry]);
 
   // Frontend simulation engine for Phase 1
   useEffect(() => {
@@ -178,55 +264,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [externalTelemetry]);
 
   // Handle local simulation command dispatch
-  const handleLocalCommand = async (type: CommandType, params?: Record<string, any>) => {
-    // If backend handler is connected, pass it up
-    if (onSendCommand) {
-      await onSendCommand(type, params);
-      return;
-    }
-
-    // Otherwise, simulate command locally (Phase 1)
+  const handleLocalCommand = async (type: CommandType, _params?: Record<string, any>) => {
     const cmdId = `cmd-${Math.floor(Math.random() * 10000)}`;
     const timestamp = new Date().toISOString();
 
     setLocalLastAck({
       command_id: cmdId,
       command_type: type,
-      status: 'PENDING',
+      status: 'SENDING',
       timestamp,
+      message: 'Local loopback uplink in progress',
     });
 
     // Simulate link latency
     setTimeout(() => {
       setTelemetry((prev) => {
         const nextTelemetry = { ...prev };
-        let status: CommandAcknowledgement['status'] = 'EXECUTED';
+        let message = 'Simulated command accepted and applied.';
         let error_message = undefined;
 
         // Command logic execution
-        if (type === 'ARM') {
-          nextTelemetry.vehicle.state = 'ARMED';
-        } else if (type === 'DISARM') {
-          if (prev.vehicle.state === 'FLYING' || prev.vehicle.state === 'TAKEOFF') {
-            status = 'FAILED';
-            error_message = 'Cannot disarm simulated vehicle while airborne.';
+        if (type === 'SET_MODE_STANDBY') {
+          nextTelemetry.vehicle.mode = 'STANDBY';
+        } else if (type === 'SET_MODE_TRACKING') {
+          if (prev.vehicle.mode === 'FAULT' || prev.vehicle.mode === 'ABORTED') {
+            error_message = 'Cannot enter TRACKING from FAULT or ABORTED state.';
           } else {
-            nextTelemetry.vehicle.state = 'DISARMED';
+            nextTelemetry.vehicle.mode = 'TRACKING';
           }
-        } else if (type === 'SET_MODE') {
-          nextTelemetry.vehicle.flight_mode = params?.mode || 'GUIDED';
-        } else if (type === 'TAKEOFF') {
-          if (prev.vehicle.state === 'DISARMED') {
-            status = 'FAILED';
-            error_message = 'Vehicle must be READY prior to simulated takeoff.';
+        } else if (type === 'SET_MODE_READY') {
+          if (prev.vehicle.mode !== 'TRACKING') {
+            error_message = 'Must be in TRACKING mode to enter READY.';
           } else {
-            nextTelemetry.vehicle.state = 'TAKEOFF';
+            nextTelemetry.vehicle.mode = 'READY';
           }
-        } else if (type === 'LAND') {
-          nextTelemetry.vehicle.state = 'LANDING';
-        } else if (type === 'RTL') {
-          nextTelemetry.vehicle.state = 'LANDING';
-          nextTelemetry.vehicle.flight_mode = 'RTL';
+        } else if (type === 'ABORT_SIMULATION') {
+          nextTelemetry.vehicle.mode = 'ABORTED';
+        } else if (type === 'RESET_FAULT') {
+          if (prev.vehicle.mode !== 'FAULT') {
+            error_message = 'System is not in FAULT state.';
+          } else {
+            nextTelemetry.vehicle.mode = 'STANDBY';
+          }
         }
 
         // Add to event logs
@@ -236,7 +315,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           severity: (error_message ? 'ERROR' : 'INFO') as any,
           message: error_message 
             ? `Command reject: ${error_message}`
-            : `Simulated flight command [${type}] executed successfully.`,
+            : `Simulated local command [${type}] executed successfully.`,
           source: 'COMMAND_UPLINK',
         };
         nextTelemetry.events = [newEvent, ...prev.events].slice(0, 100);
@@ -244,9 +323,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         setLocalLastAck({
           command_id: cmdId,
           command_type: type,
-          status,
+          status: error_message ? 'REJECTED_INVALID_TRANSITION' : 'EXECUTED',
           timestamp: new Date().toISOString(),
-          error_message,
+          message: error_message || message,
         });
 
         return nextTelemetry;
@@ -386,7 +465,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <ModeControl
           vehicle={telemetry.vehicle}
-          onSendCommand={handleLocalCommand}
+          onSendCommand={externalTelemetry && onSendCommand ? onSendCommand : handleLocalCommand}
           lastAck={externalTelemetry ? externalLastAck : localLastAck}
         />
         <LaunchboxPanel

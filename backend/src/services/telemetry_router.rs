@@ -14,6 +14,7 @@ use crate::models::telemetry::TelemetryUpdate;
 use crate::models::track::Track;
 use crate::models::vehicle::{ConnectionState, SystemMode, VehicleState};
 use crate::models::command::{CommandRequest, CommandResponse};
+use crate::models::event::SystemEvent;
 use crate::models::video::{StreamState, VideoHealthState};
 
 /// The broadcast channel buffer size.
@@ -39,6 +40,8 @@ pub struct LatestTelemetry {
     pub launchbox: LaunchboxState,
     pub video_health: VideoHealthState,
     pub diagnostics: DiagnosticsState,
+    pub latest_command: Option<CommandResponse>,
+    pub events: Vec<SystemEvent>,
 }
 
 impl LatestTelemetry {
@@ -87,6 +90,8 @@ impl LatestTelemetry {
                 uptime_seconds: 0,
                 timestamp: now,
             },
+            latest_command: None,
+            events: Vec::new(),
         }
     }
 }

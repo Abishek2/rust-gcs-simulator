@@ -5,32 +5,42 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CommandType {
-    /// Put the system into Standby mode
-    Standby,
-    /// Put the system into Tracking mode
-    TrackTarget,
-    /// Put the system into Ready mode
-    Ready,
-    /// Abort all operations and return to Standby/Aborted mode
-    Abort,
+    SetModeStandby,
+    SetModeTracking,
+    SetModeReady,
+    AbortSimulation,
+    ResetFault,
+    RunSystemCheck,
 }
 
 /// A command request sent to `POST /commands`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CommandRequest {
     pub command_type: CommandType,
-    pub target_id: Option<String>,
+    pub requested_by: String,
+    pub reason: String,
 }
 
 /// Status of a submitted command.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CommandStatus {
-    Pending,
-    Accepted,
-    Rejected,
-    Executed,
-    Timeout,
+    AckReceived,
+    AckTimeout,
+    RejectedInvalidTransition,
+    Executed, // Internal use
+}
+
+/// HTTP response for `POST /commands`.
+#[derive(Debug, Clone, Serialize)]
+pub struct CommandResponse {
+    pub command_id: String,
+    pub command_type: CommandType,
+    pub status: CommandStatus,
+    pub previous_mode: String,
+    pub new_mode: String,
+    pub timestamp: DateTime<Utc>,
+    pub message: String,
 }
 
 /// A command's tracking state within the simulator.
@@ -38,16 +48,8 @@ pub enum CommandStatus {
 pub struct CommandRecord {
     pub command_id: String,
     pub command_type: CommandType,
+    pub requested_by: String,
     pub status: CommandStatus,
-    pub target_id: Option<String>,
     pub timestamp: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-}
-
-/// HTTP response for `POST /commands`.
-#[derive(Debug, Clone, Serialize)]
-pub struct CommandResponse {
-    pub command_id: String,
-    pub status: CommandStatus,
-    pub message: String,
 }

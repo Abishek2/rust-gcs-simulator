@@ -13,18 +13,16 @@ export const ModeControl: React.FC<ModeControlProps> = ({
   onSendCommand,
   lastAck,
 }) => {
-  const [pendingCmd, setPendingCmd] = useState<string | null>(null);
+  const [localPending, setLocalPending] = useState<boolean>(false);
 
-  const handleCommand = async (type: CommandType, params: Record<string, any> = {}) => {
-    setPendingCmd(type);
+  const handleCommand = async (type: CommandType) => {
+    setLocalPending(true);
     try {
-      await onSendCommand(type, params);
+      await onSendCommand(type);
     } catch (e) {
-      console.error(e);
+      console.error('[Command Control] Command submission failed:', e);
     } finally {
-      setTimeout(() => {
-        setPendingCmd(null);
-      }, 500);
+      setLocalPending(false);
     }
   };
 
@@ -32,12 +30,22 @@ export const ModeControl: React.FC<ModeControlProps> = ({
     return (
       <div className="gcs-panel" style={{ height: '100%' }}>
         <div className="gcs-panel-header">Simulated Command Link</div>
-        <div className="gcs-panel-body" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--color-text-dim)' }}>
+        <div className="gcs-panel-body" style={{ display: 'flex', justifySelf: 'center', alignSelf: 'center', color: 'var(--color-text-dim)' }}>
           LINK DISCONNECTED
         </div>
       </div>
     );
   }
+
+  // Determine if a command is currently pending/executing (SENDING or ACK_RECEIVED)
+  const isCommandExecuting = localPending || (lastAck !== null && (lastAck.status === 'SENDING' || lastAck.status === 'ACK_RECEIVED'));
+
+  // Define transition permission flags based on backend rules
+  const currentMode = vehicle.mode; // STANDBY | TRACKING | READY | FAULT | ABORTED
+  
+  const isStandbyAllowed = currentMode !== 'FAULT' && currentMode !== 'ABORTED';
+  const isTrackingAllowed = currentMode !== 'FAULT' && currentMode !== 'ABORTED';
+  const isResetFaultAllowed = currentMode === 'FAULT';
 
   const getModeBadgeClass = (mode: Vehicle['mode']) => {
     switch (mode) {
@@ -51,6 +59,37 @@ export const ModeControl: React.FC<ModeControlProps> = ({
       case 'ABORTED':
       default:
         return 'badge-danger';
+    }
+  };
+
+  const getStatusColor = (status: CommandAcknowledgement['status']) => {
+    switch (status) {
+      case 'EXECUTED':
+      case 'ACK_RECEIVED':
+        return 'var(--color-success)';
+      case 'SENDING':
+        return 'var(--color-warning)';
+      case 'ACK_TIMEOUT':
+      case 'REJECTED_INVALID_TRANSITION':
+      default:
+        return 'var(--color-danger)';
+    }
+  };
+
+  const getStatusLabel = (status: CommandAcknowledgement['status']) => {
+    switch (status) {
+      case 'SENDING':
+        return 'SENDING...';
+      case 'ACK_RECEIVED':
+        return 'ACK RECEIVED';
+      case 'ACK_TIMEOUT':
+        return 'TIMEOUT';
+      case 'REJECTED_INVALID_TRANSITION':
+        return 'REJECTED';
+      case 'EXECUTED':
+        return 'EXECUTED';
+      default:
+        return status;
     }
   };
 
@@ -75,48 +114,76 @@ export const ModeControl: React.FC<ModeControlProps> = ({
           </div>
         </div>
 
-        {/* Tactical Flight Modes (Commands list) */}
+        {/* Command Grid */}
         <div>
           <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginBottom: '3px', fontFamily: 'var(--font-mono)' }}>
-            REQUEST STATE CHANGES
+            OPERATOR STATE ACTIONS
           </div>
           <div className="grid-2">
             <button
-              className="gcs-btn"
-              style={{ fontSize: '0.7rem', padding: '3px' }}
-              onClick={() => handleCommand('SET_MODE', { mode: 'STANDBY' })}
-              disabled={pendingCmd !== null || vehicle.mode === 'STANDBY'}
+              className={`gcs-btn ${currentMode === 'STANDBY' ? 'gcs-btn-success' : ''}`}
+              style={{ fontSize: '0.7rem', padding: '4px' }}
+              onClick={() => handleCommand('SET_MODE_STANDBY')}
+              disabled={isCommandExecuting || !isStandbyAllowed || currentMode === 'STANDBY'}
             >
-              STANDBY
+              Set Standby
             </button>
+            
             <button
-              className="gcs-btn"
-              style={{ fontSize: '0.7rem', padding: '3px' }}
-              onClick={() => handleCommand('SET_MODE', { mode: 'TRACKING' })}
-              disabled={pendingCmd !== null || vehicle.mode === 'TRACKING'}
+              className={`gcs-btn ${currentMode === 'TRACKING' ? 'gcs-btn-success' : ''}`}
+              style={{ fontSize: '0.7rem', padding: '4px' }}
+              onClick={() => handleCommand('SET_MODE_TRACKING')}
+              disabled={isCommandExecuting || !isTrackingAllowed || currentMode === 'TRACKING'}
             >
-              TRACKING
+              Set Tracking
             </button>
+
             <button
-              className="gcs-btn gcs-btn-success"
-              style={{ fontSize: '0.7rem', padding: '3px', gridColumn: 'span 2' }}
-              onClick={() => handleCommand('SET_MODE', { mode: 'READY' })}
-              disabled={pendingCmd !== null || vehicle.mode === 'READY'}
+              className={`gcs-btn gcs-btn-success ${currentMode === 'READY' ? 'gcs-btn-success' : ''}`}
+              style={{ fontSize: '0.7rem', padding: '4px', gridColumn: 'span 2' }}
+              onClick={() => handleCommand('SET_MODE_READY')}
+              disabled={isCommandExecuting || currentMode !== 'TRACKING'}
             >
-              ENGAGE READY MODE
+              Set Ready
             </button>
           </div>
         </div>
 
-        {/* Emergency Abort Trigger */}
+        {/* System Operations */}
+        <div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', marginBottom: '3px', fontFamily: 'var(--font-mono)' }}>
+            SYSTEM DIAGNOSTICS & FAULTS
+          </div>
+          <div className="grid-2">
+            <button
+              className="gcs-btn"
+              style={{ fontSize: '0.7rem', padding: '4px' }}
+              onClick={() => handleCommand('RUN_SYSTEM_CHECK')}
+              disabled={isCommandExecuting}
+            >
+              Run System Check
+            </button>
+
+            <button
+              className={`gcs-btn ${isResetFaultAllowed ? 'gcs-btn-success blink' : ''}`}
+              style={{ fontSize: '0.7rem', padding: '4px' }}
+              onClick={() => handleCommand('RESET_FAULT')}
+              disabled={isCommandExecuting || !isResetFaultAllowed}
+            >
+              Reset Fault
+            </button>
+          </div>
+        </div>
+
+        {/* Emergency Abort (Always enabled as a critical fail-safe override) */}
         <div>
           <button
             className="gcs-btn gcs-btn-danger blink"
             style={{ width: '100%', fontWeight: 'bold', fontSize: '0.75rem', padding: '4px' }}
-            onClick={() => handleCommand('RTL')} // Mapped as Abort/RTL command
-            disabled={pendingCmd !== null || vehicle.mode === 'ABORTED'}
+            onClick={() => handleCommand('ABORT_SIMULATION')}
+            disabled={currentMode === 'ABORTED'}
           >
-            ABORT SIMULATED WORKFLOW
+            Abort Simulation
           </button>
         </div>
 
@@ -133,22 +200,35 @@ export const ModeControl: React.FC<ModeControlProps> = ({
           <div style={{ color: 'var(--color-cyber-blue)', fontSize: '0.6rem', marginBottom: '1px', textTransform: 'uppercase' }}>
             COMMAND CONSOLE LINK
           </div>
-          {pendingCmd ? (
-            <div style={{ color: 'var(--color-warning)' }} className="blink">
-              &gt;&gt; TX: TRANSMITTING MODE REQ...
-            </div>
-          ) : lastAck ? (
+          {lastAck ? (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'between' }}>
-                <span>ACK CODE: {lastAck.status}</span>
+              <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>CMD: {lastAck.command_type}</span>
+                <span 
+                  className="badge" 
+                  style={{ 
+                    fontSize: '0.55rem',
+                    padding: '0px 4px',
+                    marginLeft: 'auto',
+                    borderColor: getStatusColor(lastAck.status),
+                    color: getStatusColor(lastAck.status)
+                  }}
+                >
+                  {getStatusLabel(lastAck.status)}
+                </span>
               </div>
-              <div style={{ fontSize: '0.6rem', color: 'var(--color-text-dim)', textAlign: 'right' }}>
-                TIME: {new Date(lastAck.timestamp).toLocaleTimeString()}
+              {lastAck.message && (
+                <div style={{ color: lastAck.status === 'REJECTED_INVALID_TRANSITION' || lastAck.status === 'ACK_TIMEOUT' ? 'var(--color-danger)' : 'var(--color-text-secondary)', fontSize: '0.6rem', marginTop: '2px', wordBreak: 'break-all' }}>
+                  MSG: {lastAck.message}
+                </div>
+              )}
+              <div style={{ fontSize: '0.55rem', color: 'var(--color-text-dim)', textAlign: 'right', marginTop: '1px' }}>
+                UTC: {new Date(lastAck.timestamp).toLocaleTimeString()}
               </div>
             </div>
           ) : (
             <div style={{ color: 'var(--color-text-dim)' }}>
-              &gt;&gt; UPLINK READY (SIMULATION STANDBY)
+              &gt;&gt; UPLINK READY (AWAITING INPUT)
             </div>
           )}
         </div>

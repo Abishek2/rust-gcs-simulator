@@ -2,7 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use super::diagnostics::DiagnosticsState;
+use super::event::SystemEvent;
 use super::launchbox::LaunchboxState;
+use super::command::CommandResponse;
 use super::track::Track;
 use super::vehicle::VehicleState;
 use super::video::VideoHealthState;
@@ -53,6 +55,12 @@ pub struct TelemetryUpdate {
 
     /// Backend diagnostics snapshot (Phase 3)
     pub diagnostics: DiagnosticsState,
+
+    /// Latest command status (Phase 4)
+    pub latest_command: Option<CommandResponse>,
+
+    /// Recent events (Phase 4)
+    pub events: Vec<SystemEvent>,
 }
 
 impl TelemetryUpdate {
@@ -63,6 +71,8 @@ impl TelemetryUpdate {
         launchbox: LaunchboxState,
         video_health: VideoHealthState,
         diagnostics: DiagnosticsState,
+        latest_command: Option<CommandResponse>,
+        events: Vec<SystemEvent>,
     ) -> Self {
         Self {
             msg_type: "telemetry_update".to_string(),
@@ -72,6 +82,8 @@ impl TelemetryUpdate {
             launchbox,
             video_health,
             diagnostics,
+            latest_command,
+            events,
         }
     }
 }

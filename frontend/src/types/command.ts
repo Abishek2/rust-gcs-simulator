@@ -1,22 +1,30 @@
 export type CommandType =
-  | 'ARM'
-  | 'DISARM'
-  | 'TAKEOFF'
-  | 'LAND'
-  | 'RTL'
-  | 'SET_MODE'
-  | 'FIRE_SIMULATED_CELL'
-  | 'TOGGLE_SAFETY';
+  | 'SET_MODE_STANDBY'
+  | 'SET_MODE_TRACKING'
+  | 'SET_MODE_READY'
+  | 'ABORT_SIMULATION'
+  | 'RESET_FAULT'
+  | 'RUN_SYSTEM_CHECK';
+
+export type CommandStatus =
+  | 'SENDING'
+  | 'ACK_RECEIVED'
+  | 'ACK_TIMEOUT'
+  | 'REJECTED_INVALID_TRANSITION'
+  | 'EXECUTED';
 
 export interface CommandPayload {
   command_type: CommandType;
-  parameters: Record<string, any>;
+  requested_by: string;
+  reason: string;
 }
 
 export interface CommandAcknowledgement {
   command_id: string;
   command_type: CommandType;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'TIMEOUT';
+  status: CommandStatus;
   timestamp: string;
-  error_message?: string;
+  previous_mode?: string;
+  new_mode?: string;
+  message?: string;
 }

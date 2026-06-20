@@ -6,6 +6,7 @@ import { DiagnosticsPage } from './pages/Diagnostics';
 import { ReplayPage } from './pages/Replay';
 import { AboutPage } from './pages/About';
 import type { TelemetryUpdate } from './types/telemetry';
+import type { CommandType, CommandAcknowledgement } from './types/command';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'diagnostics' | 'replay' | 'about'>('dashboard');
@@ -16,6 +17,9 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [stale, setStale] = useState<boolean>(false);
   const [backendHealth, setBackendHealth] = useState<'ok' | 'error' | 'loading'>('loading');
+
+  // Command control states (Phase 4)
+  const [lastAck, setLastAck] = useState<CommandAcknowledgement | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -51,7 +55,30 @@ function App() {
         console.log(`[WS] Message received from backend. Type: ${data.type || 'unknown'}, Timestamp: ${data.timestamp}`);
         
         if (data.type === 'telemetry_update') {
-          setLiveTelemetry(data as TelemetryUpdate);
+          const update = data as TelemetryUpdate;
+          setLiveTelemetry(update);
+          
+          if (update.latest_command) {
+            setLastAck((prev) => {
+              if (!prev) return update.latest_command!;
+              
+              if (prev.status === 'SENDING') {
+                if (update.latest_command!.command_type === prev.command_type) {
+                  return update.latest_command!;
+                }
+                return prev;
+              }
+              
+              const prevTime = new Date(prev.timestamp).getTime();
+              const nextTime = new Date(update.latest_command!.timestamp).getTime();
+              
+              if (nextTime >= prevTime) {
+                return update.latest_command!;
+              }
+              return prev;
+            });
+          }
+          
           lastMessageTimeRef.current = Date.now();
           setLastUpdate(new Date());
           setStale(false);
@@ -78,6 +105,69 @@ function App() {
         connectWebSocket();
       }, 3000);
     };
+  };
+
+  // 3. POST Command submit to backend (Phase 4)
+  const handleSendCommand = async (type: CommandType, params?: Record<string, any>) => {
+    const tempAck: CommandAcknowledgement = {
+      command_id: `temp-${Date.now()}`,
+      command_type: type,
+      status: 'SENDING',
+      timestamp: new Date().toISOString(),
+      message: 'Uplink command transmission initiated...',
+    };
+    setLastAck(tempAck);
+
+    try {
+      console.log(`[REST API] Submitting command ${type} to backend`);
+      const body = {
+        command_type: type,
+        requested_by: 'Operator Console',
+        reason: params?.reason || 'Routine state modification',
+      };
+
+      const res = await fetch(`${apiBaseUrl}/commands`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.status === 202) {
+        const ackData = await res.json() as CommandAcknowledgement;
+        console.log(`[REST API] Command accepted:`, ackData);
+        setLastAck(ackData);
+      } else if (res.status === 400) {
+        const errData = await res.json() as CommandAcknowledgement;
+        console.warn(`[REST API] Command rejected by state machine:`, errData);
+        setLastAck(errData);
+      } else {
+        let errMsg = 'Unknown error occurred during uplink transmission';
+        try {
+          const errData = await res.json();
+          errMsg = errData.message || errMsg;
+        } catch {}
+        
+        console.error(`[REST API] Command failed with status code ${res.status}`);
+        setLastAck({
+          command_id: `err-${Date.now()}`,
+          command_type: type,
+          status: 'REJECTED_INVALID_TRANSITION',
+          timestamp: new Date().toISOString(),
+          message: `Server Error (${res.status}): ${errMsg}`,
+        });
+      }
+    } catch (err) {
+      console.error('[REST API] Command fetch failed:', err);
+      setLastAck({
+        command_id: `err-${Date.now()}`,
+        command_type: type,
+        status: 'ACK_TIMEOUT',
+        timestamp: new Date().toISOString(),
+        message: 'Network connection failure or timeout during command uplink.',
+      });
+    }
   };
 
   // 2. Poll Backend /health REST API
@@ -146,6 +236,8 @@ function App() {
         return (
           <Dashboard 
             externalTelemetry={liveTelemetry}
+            onSendCommand={handleSendCommand}
+            lastAck={lastAck}
           />
         );
     }

@@ -13,4 +13,4 @@ pub mod diagnostics;
 
 // Phase 4+: Uncomment as we add models
 pub mod command;
-// pub mod event;
+pub mod event;

@@ -258,36 +258,41 @@ Returns immediately with an `ACCEPTED` status and a generated `command_id`. The 
 **Request:**
 ```json
 {
-  "command_type": "TRACK_TARGET",
-  "target_id": "TRK-002"
+  "command_type": "SET_MODE_TRACKING",
+  "requested_by": "operator-demo",
+  "reason": "portfolio simulation workflow"
 }
 ```
 
 #### CommandType values
 | Value | Description |
 |-------|-------------|
-| `"STANDBY"` | Put the system into Standby mode |
-| `"TRACK_TARGET"` | Put the system into Tracking mode |
-| `"READY"` | Put the system into Ready mode |
-| `"ABORT"` | Abort operations and enter Aborted mode |
+| `"SET_MODE_STANDBY"` | Put the system into Standby mode |
+| `"SET_MODE_TRACKING"` | Put the system into Tracking mode |
+| `"SET_MODE_READY"` | Put the system into Ready mode |
+| `"ABORT_SIMULATION"` | Abort operations and enter Aborted mode |
+| `"RESET_FAULT"` | Reset system fault state back to Standby |
+| `"RUN_SYSTEM_CHECK"` | Run a diagnostic system check |
 
 **Response:** `202 ACCEPTED`
 ```json
 {
-  "command_id": "ddc30836-30eb-47c1-93dc-1c225151d434",
-  "status": "ACCEPTED",
-  "message": "Command submitted"
+  "command_id": "73e4d8d2-614f-4cf8-a515-43c1582fa27f",
+  "command_type": "SET_MODE_TRACKING",
+  "status": "ACK_RECEIVED",
+  "previous_mode": "STANDBY",
+  "new_mode": "TRACKING",
+  "timestamp": "2026-06-20T17:20:07Z",
+  "message": "Simulated command accepted and applied."
 }
 ```
 
 #### CommandStatus values
 | Value | Description |
 |-------|-------------|
-| `"PENDING"` | Received by state machine |
-| `"ACCEPTED"` | Validated and processing |
-| `"REJECTED"` | Invalid or conflict with active command |
-| `"EXECUTED"` | Completed successfully |
-| `"TIMEOUT"` | Failed to complete in time |
+| `"ACK_RECEIVED"` | Command accepted by simulator |
+| `"ACK_TIMEOUT"` | Command execution timed out |
+| `"REJECTED_INVALID_TRANSITION"` | Cannot perform transition from current state |
 
 ---
 

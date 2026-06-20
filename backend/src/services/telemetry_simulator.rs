@@ -252,6 +252,8 @@ pub fn start_simulator(
         let mut video_sim = VideoHealthSimulator::new();
         let mut diagnostics = DiagnosticsTracker::new();
         let mut state_machine = crate::services::state_machine::StateMachine::new();
+        let mut events_buffer = std::collections::VecDeque::new();
+        let mut latest_command = None;
         let mut rng = StdRng::from_os_rng();
         let mut tick_interval = interval(Duration::from_secs(1));
         let mut tick_count: u64 = 0;
@@ -274,17 +276,42 @@ pub fn start_simulator(
 
             // --- Process pending commands ---
             while let Ok((request, reply)) = command_rx.try_recv() {
-                let command_id = state_machine.accept_command(request);
-                let response = crate::models::command::CommandResponse {
-                    command_id,
-                    status: crate::models::command::CommandStatus::Accepted, // Just a default return status for the API response
-                    message: "Command submitted".to_string(),
+                let response = state_machine.accept_command(request.clone());
+                
+                // Add event
+                let msg = if response.status == crate::models::command::CommandStatus::AckReceived {
+                    format!("Command accepted: {:?}", request.command_type)
+                } else {
+                    format!("Command rejected: {}", response.message)
                 };
+                events_buffer.push_back(crate::models::event::SystemEvent::new(msg, request.requested_by.clone()));
+                if events_buffer.len() > 50 { events_buffer.pop_front(); }
+                diagnostics.record_event();
+
+                latest_command = Some(response.clone());
                 let _ = reply.send(response);
             }
 
             // --- Advance state machine ---
-            state_machine.tick();
+            if let Some(executed) = state_machine.tick() {
+                let msg = format!("Command {:?} finished with status {:?}", executed.command_type, executed.status);
+                events_buffer.push_back(crate::models::event::SystemEvent::new(msg, "System".to_string()));
+                if events_buffer.len() > 50 { events_buffer.pop_front(); }
+                diagnostics.record_event();
+                
+                // Update latest command response if it matches
+                if let Some(latest) = &mut latest_command {
+                    if latest.command_id == executed.command_id {
+                        latest.status = executed.status.clone();
+                        latest.new_mode = format!("{:?}", state_machine.current_mode).to_uppercase();
+                        if executed.status == crate::models::command::CommandStatus::Executed {
+                            latest.message = "Command executed successfully.".to_string();
+                        } else {
+                            latest.message = "Command timed out.".to_string();
+                        }
+                    }
+                }
+            }
             vehicle.mode = state_machine.current_mode.clone();
 
             // --- Measure tick processing time ---
@@ -295,12 +322,15 @@ pub fn start_simulator(
             let diag = diagnostics.snapshot(state.client_count());
 
             // --- Build full telemetry update ---
+            let events_vec: Vec<_> = events_buffer.iter().cloned().collect();
             let update = TelemetryUpdate::new(
                 tracks.clone(),
                 vehicle.clone(),
                 launchbox_sim.state().clone(),
                 video_sim.state().clone(),
                 diag.clone(),
+                latest_command.clone(),
+                events_vec.clone(),
             );
 
             // --- Update shared state for HTTP endpoints ---
@@ -311,6 +341,8 @@ pub fn start_simulator(
                     launchbox: launchbox_sim.state().clone(),
                     video_health: video_sim.state().clone(),
                     diagnostics: diag,
+                    latest_command: latest_command.clone(),
+                    events: events_vec,
                 };
             }
 

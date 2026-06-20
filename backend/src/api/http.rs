@@ -109,14 +109,21 @@ pub async fn post_command(
     Json(payload): Json<crate::models::command::CommandRequest>,
 ) -> impl IntoResponse {
     let (tx, rx) = tokio::sync::oneshot::channel();
+    let command_type = payload.command_type.clone();
     
     // Send to simulator loop
     if state.command_tx.send((payload, tx)).await.is_err() {
+        let latest = state.latest.read().expect("lock poisoned");
+        let current_mode = format!("{:?}", latest.vehicle.mode).to_uppercase();
         return (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Json(crate::models::command::CommandResponse {
                 command_id: "".to_string(),
-                status: crate::models::command::CommandStatus::Rejected,
+                command_type,
+                status: crate::models::command::CommandStatus::RejectedInvalidTransition,
+                previous_mode: current_mode.clone(),
+                new_mode: current_mode,
+                timestamp: chrono::Utc::now(),
                 message: "Failed to send command to simulator".to_string(),
             }),
         ).into_response();
@@ -124,14 +131,29 @@ pub async fn post_command(
 
     // Wait for initial simulator response
     match rx.await {
-        Ok(response) => (axum::http::StatusCode::ACCEPTED, Json(response)).into_response(),
-        Err(_) => (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(crate::models::command::CommandResponse {
-                command_id: "".to_string(),
-                status: crate::models::command::CommandStatus::Rejected,
-                message: "Simulator failed to process command".to_string(),
-            }),
-        ).into_response(),
+        Ok(response) => {
+            let status_code = if response.status == crate::models::command::CommandStatus::AckReceived {
+                axum::http::StatusCode::ACCEPTED
+            } else {
+                axum::http::StatusCode::BAD_REQUEST
+            };
+            (status_code, Json(response)).into_response()
+        },
+        Err(_) => {
+            let latest = state.latest.read().expect("lock poisoned");
+            let current_mode = format!("{:?}", latest.vehicle.mode).to_uppercase();
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(crate::models::command::CommandResponse {
+                    command_id: "".to_string(),
+                    command_type,
+                    status: crate::models::command::CommandStatus::RejectedInvalidTransition,
+                    previous_mode: current_mode.clone(),
+                    new_mode: current_mode,
+                    timestamp: chrono::Utc::now(),
+                    message: "Simulator failed to process command".to_string(),
+                }),
+            ).into_response()
+        }
     }
 }
