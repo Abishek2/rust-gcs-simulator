@@ -13,6 +13,7 @@
 // Each `mod` statement corresponds to a file or directory.
 mod api;
 mod config;
+mod db;
 mod error;
 mod models;
 mod services;
@@ -70,16 +71,21 @@ async fn main() -> anyhow::Result<()> {
     // --- Step 3: Initialize the server start time for uptime tracking ---
     api::http::init_start_time();
 
-    // --- Step 4: Create shared application state ---
+    // --- Step 4: Initialize database and create session ---
+    let pool = db::init_db().await.expect("Failed to initialize database");
+    let session = db::create_session(&pool).await.expect("Failed to create simulation session");
+    tracing::info!(session_id = %session.session_id, "simulation session created");
+
+    // --- Step 5: Create shared application state ---
     //
     // # Rust Concept: Shared state with Axum
     // AppState holds the broadcast channel that connects the simulator
     // to WebSocket clients. `.with_state(state)` passes it to all handlers
     // so they can call `State(state)` to access it.
-    let (state, command_rx) = AppState::new();
+    let (state, command_rx) = AppState::new(pool, session.session_id);
     tracing::info!("application state initialized");
 
-    // --- Step 5: Start the telemetry simulator ---
+    // --- Step 6: Start the telemetry simulator ---
     //
     // This spawns a background Tokio task that runs all subsystem
     // simulations (tracks, vehicle, launchbox, video, diagnostics)
@@ -89,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
     services::telemetry_simulator::start_simulator(state.clone(), command_rx);
     tracing::info!("telemetry simulator spawned (all subsystems active)");
 
-    // --- Step 6: Build the Axum router ---
+    // --- Step 7: Build the Axum router ---
     //
     // # Rust Concept: Method chaining (Builder pattern)
     // Axum uses the builder pattern where each `.route()` call adds an
@@ -117,6 +123,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/diagnostics", axum::routing::get(api::http::get_diagnostics))
         // Phase 4: Command API
         .route("/commands", axum::routing::post(api::http::post_command))
+        // Phase 5: Event and Replay API
+        .route("/events", axum::routing::get(api::http::get_events))
+        .route("/replay/sessions", axum::routing::get(api::http::get_sessions))
+        .route("/replay/{session_id}", axum::routing::get(api::http::get_session_events))
         // Shared state — available to all handlers via State extractor
         .with_state(state)
         // Middleware: CORS and request tracing

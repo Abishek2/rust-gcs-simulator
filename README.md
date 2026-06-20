@@ -37,7 +37,7 @@ You will need **Rust (1.80+)** and **Node.js (20+)** installed.
    cd backend
    cargo run
    ```
-   The backend will run on `http://localhost:3001`.
+   The backend will automatically create the `gcs_simulator.db` SQLite database using migrations and begin simulating telemetry data on `http://localhost:3001`.
 
 2. **Start the Frontend:**
    ```bash
@@ -56,7 +56,7 @@ From the root of the project:
 docker compose up --build
 ```
 
-* The backend will be exposed on `http://localhost:3001`.
+* The backend will be exposed on `http://localhost:3001`. The database is automatically persisted using the `gcs_data` Docker volume.
 * The frontend preview server will be exposed on `http://localhost:4173`.
 
 *Note: You can stop the containers using `docker compose down`.*
@@ -76,9 +76,8 @@ docker compose up --build
   * If `cargo run` fails to compile, update Rust using `rustup update`.
   * If `npm install` or `npm run dev` fails, ensure you are using Node.js v20 or later. Use `nvm install 20` or equivalent.
 
-## Next Steps (Phase 5)
+## Replay API (Phase 5)
 
-Phase 5 will introduce persistence by adding a database placeholder. This will involve:
-* Adding a database like SQLite or PostgreSQL for storing historical telemetry, session logs, or vehicle configurations.
-* Setting up database connection pooling in the backend (e.g., using SQLx).
-* Creating initial database migrations.
+*   `GET /events` - Returns latest persisted system events.
+*   `GET /replay/sessions` - Returns a list of all simulation sessions.
+*   `GET /replay/{session_id}` - Returns all events for a specific simulation session.

@@ -24,3 +24,9 @@ yarn-error.log*
 .DS_Store
 .vscode/
 .idea/
+# SQLite / local database
+*.db
+*.sqlite
+*.sqlite3
+backend/data/
+data/

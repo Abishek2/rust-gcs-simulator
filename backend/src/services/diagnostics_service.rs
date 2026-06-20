@@ -27,7 +27,7 @@ pub struct DiagnosticsTracker {
     /// Total messages dropped (no subscribers)
     dropped_message_count: u64,
     /// Total events recorded (for Phase 5 replay)
-    event_count: u64,
+    pub event_count: u64,
     /// Rolling window of tick processing times
     tick_latencies: VecDeque<Duration>,
     /// Maximum latency ever observed

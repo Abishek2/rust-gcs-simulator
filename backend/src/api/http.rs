@@ -157,3 +157,51 @@ pub async fn post_command(
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  GET /events  (Phase 5)
+// ═══════════════════════════════════════════════════════════════════
+
+/// GET /events — returns a list of recent system events from the database.
+pub async fn get_events(State(state): State<AppState>) -> impl IntoResponse {
+    match crate::db::get_events(&state.pool).await {
+        Ok(events) => (axum::http::StatusCode::OK, Json(events)).into_response(),
+        Err(e) => {
+            tracing::error!("Database error fetching events: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(vec![crate::models::event::SystemEvent::new(state.session_id.clone(), "ERROR", "System", "ERROR", "Failed to fetch events".to_string(), None)])).into_response()
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  GET /replay/sessions  (Phase 5)
+// ═══════════════════════════════════════════════════════════════════
+
+/// GET /replay/sessions — returns a list of all simulation sessions.
+pub async fn get_sessions(State(state): State<AppState>) -> impl IntoResponse {
+    match crate::db::get_sessions(&state.pool).await {
+        Ok(sessions) => (axum::http::StatusCode::OK, Json(sessions)).into_response(),
+        Err(e) => {
+            tracing::error!("Database error fetching sessions: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(Vec::<crate::models::event::SimulationSession>::new())).into_response()
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  GET /replay/{session_id}  (Phase 5)
+// ═══════════════════════════════════════════════════════════════════
+
+/// GET /replay/{session_id} — returns all events for a specific session.
+pub async fn get_session_events(
+    State(state): State<AppState>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    match crate::db::get_session_events(&state.pool, &session_id).await {
+        Ok(events) => (axum::http::StatusCode::OK, Json(events)).into_response(),
+        Err(e) => {
+            tracing::error!("Database error fetching session events: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(Vec::<crate::models::event::SystemEvent>::new())).into_response()
+        }
+    }
+}

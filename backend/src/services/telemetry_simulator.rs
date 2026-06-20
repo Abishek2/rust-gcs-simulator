@@ -254,6 +254,12 @@ pub fn start_simulator(
         let mut state_machine = crate::services::state_machine::StateMachine::new();
         let mut events_buffer = std::collections::VecDeque::new();
         let mut latest_command = None;
+
+        // Initialize event count from DB
+        if let Ok(count) = crate::db::get_event_count(&state.pool).await {
+            diagnostics.event_count = count;
+        }
+
         let mut rng = StdRng::from_os_rng();
         let mut tick_interval = interval(Duration::from_secs(1));
         let mut tick_count: u64 = 0;
@@ -284,7 +290,19 @@ pub fn start_simulator(
                 } else {
                     format!("Command rejected: {}", response.message)
                 };
-                events_buffer.push_back(crate::models::event::SystemEvent::new(msg, request.requested_by.clone()));
+                let event = crate::models::event::SystemEvent::new(
+                    state.session_id.clone(),
+                    "COMMAND",
+                    &request.requested_by,
+                    "INFO",
+                    msg,
+                    Some(serde_json::to_value(&request).unwrap_or(serde_json::Value::Null)),
+                );
+                events_buffer.push_back(event.clone());
+                let pool_clone = state.pool.clone();
+                tokio::spawn(async move {
+                    let _ = crate::db::persist_event(&pool_clone, &event).await;
+                });
                 if events_buffer.len() > 50 { events_buffer.pop_front(); }
                 diagnostics.record_event();
 
@@ -295,7 +313,19 @@ pub fn start_simulator(
             // --- Advance state machine ---
             if let Some(executed) = state_machine.tick() {
                 let msg = format!("Command {:?} finished with status {:?}", executed.command_type, executed.status);
-                events_buffer.push_back(crate::models::event::SystemEvent::new(msg, "System".to_string()));
+                let event = crate::models::event::SystemEvent::new(
+                    state.session_id.clone(),
+                    "STATE_TRANSITION",
+                    "System",
+                    "INFO",
+                    msg,
+                    Some(serde_json::to_value(&executed).unwrap_or(serde_json::Value::Null)),
+                );
+                events_buffer.push_back(event.clone());
+                let pool_clone = state.pool.clone();
+                tokio::spawn(async move {
+                    let _ = crate::db::persist_event(&pool_clone, &event).await;
+                });
                 if events_buffer.len() > 50 { events_buffer.pop_front(); }
                 diagnostics.record_event();
                 

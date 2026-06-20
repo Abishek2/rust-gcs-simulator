@@ -9,6 +9,9 @@ services:
       - GCS_HOST=0.0.0.0
       - GCS_PORT=3001
       - GCS_LOG_LEVEL=${GCS_LOG_LEVEL:-info}
+      - DATABASE_URL=sqlite:///data/gcs_simulator.db
+    volumes:
+      - gcs_data:/data
     restart: unless-stopped
 
   frontend:
@@ -23,3 +26,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  gcs_data:

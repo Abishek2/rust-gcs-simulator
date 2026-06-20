@@ -106,44 +106,56 @@ impl LatestTelemetry {
 pub struct AppState {
     /// Sender side of the telemetry broadcast channel.
     pub telemetry_tx: broadcast::Sender<TelemetryUpdate>,
-
-    /// Number of currently connected WebSocket clients.
-    pub connected_clients: Arc<AtomicU32>,
-
-    /// Latest telemetry snapshot for HTTP GET endpoints.
-    /// Protected by an RwLock for concurrent read access.
     pub latest: Arc<RwLock<LatestTelemetry>>,
-
-    /// Channel for sending commands from the HTTP API to the simulator loop.
-    pub command_tx: tokio::sync::mpsc::Sender<(CommandRequest, tokio::sync::oneshot::Sender<CommandResponse>)>,
+    pub client_count_metrics: Arc<AtomicU32>,
+    pub command_tx: tokio::sync::mpsc::Sender<(
+        CommandRequest,
+        tokio::sync::oneshot::Sender<CommandResponse>,
+    )>,
+    pub pool: sqlx::SqlitePool,
+    pub session_id: String,
 }
 
 impl AppState {
-    /// Create a new AppState with a fresh broadcast channel and default state.
-    pub fn new() -> (Self, tokio::sync::mpsc::Receiver<(CommandRequest, tokio::sync::oneshot::Sender<CommandResponse>)>) {
+    /// Create the shared state, broadcast channel, and command channel.
+    pub fn new(pool: sqlx::SqlitePool, session_id: String) -> (
+        Self,
+        tokio::sync::mpsc::Receiver<(
+            CommandRequest,
+            tokio::sync::oneshot::Sender<CommandResponse>,
+        )>,
+    ) {
         let (telemetry_tx, _) = broadcast::channel(BROADCAST_CAPACITY);
-        let (command_tx, command_rx) = tokio::sync::mpsc::channel(32);
+        let latest = Arc::new(RwLock::new(LatestTelemetry::default_state()));
+        let client_count_metrics = Arc::new(AtomicU32::new(0));
 
-        (Self {
+        // Create the mpsc channel for Phase 4 commands
+        let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
+
+        let state = Self {
             telemetry_tx,
-            connected_clients: Arc::new(AtomicU32::new(0)),
-            latest: Arc::new(RwLock::new(LatestTelemetry::default_state())),
+            latest,
+            client_count_metrics,
             command_tx,
-        }, command_rx)
+            pool,
+            session_id,
+        };
+
+        (state, command_rx)
     }
 
     /// Increment connected client count. Returns the new count.
     pub fn client_connected(&self) -> u32 {
-        self.connected_clients.fetch_add(1, Ordering::Relaxed) + 1
+        self.client_count_metrics.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     /// Decrement connected client count. Returns the new count.
     pub fn client_disconnected(&self) -> u32 {
-        self.connected_clients.fetch_sub(1, Ordering::Relaxed) - 1
+        self.client_count_metrics.fetch_sub(1, Ordering::Relaxed) - 1
     }
 
-    /// Get the current connected client count.
+    /// Get current client count.
     pub fn client_count(&self) -> u32 {
-        self.connected_clients.load(Ordering::Relaxed)
+        self.client_count_metrics.load(Ordering::Relaxed)
     }
 }

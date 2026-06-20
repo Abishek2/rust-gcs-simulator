@@ -1,6 +1,6 @@
 # GCS Backend — API Contract
 
-> **Version:** 0.4.0 (Phase 4)
+> **Version:** 0.5.0 (Phase 5)
 > **Base URL:** `http://localhost:3001`
 > **WebSocket URL:** `ws://localhost:3001`
 >
@@ -296,6 +296,66 @@ Returns immediately with an `ACCEPTED` status and a generated `command_id`. The 
 
 ---
 
+## Replay and Event API (Phase 5)
+
+### `GET /events`
+
+Returns a list of recent system events from the database (descending order by timestamp).
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "event_id": "e9b28a7e-1234-...",
+    "session_id": "session-xyz",
+    "event_type": "COMMAND",
+    "source": "operator-demo",
+    "severity": "INFO",
+    "message": "Command accepted: SET_MODE_TRACKING",
+    "timestamp": "2026-06-20T17:20:00Z",
+    "payload": "{\"command_type\": \"SET_MODE_TRACKING\", \"requested_by\": \"operator-demo\", \"reason\": \"portfolio simulation workflow\"}"
+  }
+]
+```
+
+### `GET /replay/sessions`
+
+Returns a list of all recorded simulation sessions (descending order by start time).
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "session_id": "session-xyz",
+    "start_time": "2026-06-20T17:15:00Z",
+    "end_time": null,
+    "status": "active"
+  }
+]
+```
+
+### `GET /replay/{session_id}`
+
+Returns all system events recorded during a specific simulation session (ascending order by timestamp).
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "event_id": "...",
+    "session_id": "session-xyz",
+    "event_type": "STATE_TRANSITION",
+    "source": "System",
+    "severity": "INFO",
+    "message": "Command SET_MODE_TRACKING finished with status Executed",
+    "timestamp": "2026-06-20T17:20:04Z",
+    "payload": "{...}"
+  }
+]
+```
+
+---
+
 ## WebSocket Endpoints
 
 ### `WS /ws/telemetry`
@@ -401,8 +461,4 @@ ws.onmessage = (event) => {
 
 ## Endpoints coming in future phases
 
-| Method | Path | Phase | Description |
-|--------|------|-------|-------------|
-| `GET` | `/events` | 5 | Event log query |
-| `GET` | `/replay/sessions` | 5 | List replay sessions |
-| `GET` | `/replay/{session_id}` | 5 | Replay a session |
+(All backend phases complete)

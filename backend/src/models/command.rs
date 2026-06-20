@@ -14,7 +14,7 @@ pub enum CommandType {
 }
 
 /// A command request sent to `POST /commands`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandRequest {
     pub command_type: CommandType,
     pub requested_by: String,
