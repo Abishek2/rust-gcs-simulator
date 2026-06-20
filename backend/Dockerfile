@@ -41,4 +41,4 @@ RUN mkdir -p /data && chown -R root:root /data
 EXPOSE 3001
 
 # Command to run the application
-CMD ["gcs-backend"]
+CMD ["sh", "-c", "mkdir -p /data /tmp && touch /data/gcs_simulator.db /tmp/gcs_simulator.db && exec gcs-backend"]
